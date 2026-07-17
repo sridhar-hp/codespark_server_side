@@ -17,5 +17,17 @@
   "bugs": {
     "url": "https://github.com/sridhar-hp/codespark_server_side/issues"
   },
-  "homepage": "https://github.com/sridhar-hp/codespark_server_side#readme"
+  "homepage": "https://github.com/sridhar-hp/codespark_server_side#readme",
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.7.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
 }
