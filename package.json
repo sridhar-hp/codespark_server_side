@@ -1,0 +1,21 @@
+{
+  "name": "codespark_server_side",
+  "version": "1.0.0",
+  "description": "today I done complete folder structure for backend (professional folder structure)",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sridhar-hp/codespark_server_side.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/sridhar-hp/codespark_server_side/issues"
+  },
+  "homepage": "https://github.com/sridhar-hp/codespark_server_side#readme"
+}
