@@ -1,5 +1,5 @@
 // src/services/business/achievementService.js
-const Achievement = require('../../models/Achievement');
+const Achievement = require('../../models/AchievementValidation');
 const UserAchievement = require('../../models/UserAchievement');
 const XPService = require('./xpService');
 
