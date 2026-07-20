@@ -23,9 +23,6 @@ const passwordResetRoutes = require('./routes/passwordResetRoutes');
 
 const app = express();
 
-// DB connection
-connectDB();
-
 // Global middleware
 app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
 app.use(express.json());
