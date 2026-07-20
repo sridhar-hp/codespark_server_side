@@ -11,3 +11,4 @@ router.use(protect);
 router.post('/', notifValidate.create, validate, notifController.create);
 router.get('/', notifController.list);
 router.patch('/:id/read', notifController.markRead);
+module.exports = router;
