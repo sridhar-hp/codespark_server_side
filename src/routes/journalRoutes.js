@@ -12,3 +12,4 @@ router.post('/', journalValidate.create, validate, journalController.create);
 router.get('/', journalController.list);
 router.put('/:id', journalValidate.create, validate, journalController.update);
 router.delete('/:id', journalController.delete);
+module.exports = router;
