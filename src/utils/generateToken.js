@@ -20,3 +20,4 @@ const generateTokens = (payload) => {
 };
 
 module.exports = generateTokens;
+
