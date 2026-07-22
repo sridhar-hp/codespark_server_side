@@ -30,7 +30,14 @@ class AuthService {
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
     });
 
-    return { user, accessToken, refreshToken };
+const safeUser = user.toObject();
+delete safeUser.password;
+
+return {
+  user: safeUser,
+  accessToken,
+  refreshToken,
+};
   }
 
   static async login({ email, password }) {
@@ -63,7 +70,14 @@ class AuthService {
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     });
 
-    return { user, accessToken, refreshToken };
+const safeUser = user.toObject();
+delete safeUser.password;
+
+return {
+  user: safeUser,
+  accessToken,
+  refreshToken,
+};
   }
 
   static async refresh({ refreshToken }) {
