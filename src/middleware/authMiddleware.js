@@ -39,6 +39,7 @@ req.user = {
 
 next();
   } catch (err) {
+    console.error("Auth Middleware Error:", err);
     return error(res, new Error('Not authorized, token invalid'), 401);
   }
 };
