@@ -1,5 +1,5 @@
 // src/middleware/authMiddleware.js
-
+const AuthToken = require('../utils/authToken');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 const { error } = require('../utils/responseHandler');
@@ -24,8 +24,20 @@ const protect = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = { id: decoded.id, role: decoded.role };
-    next();
+
+// Check if the token still exists in the database
+const storedToken = await AuthToken.findOne({ token });
+
+if (!storedToken) {
+  return error(res, new Error('Not authorized, token has been revoked'), 401);
+}
+
+req.user = {
+  id: decoded.id,
+  role: decoded.role,
+};
+
+next();
   } catch (err) {
     return error(res, new Error('Not authorized, token invalid'), 401);
   }
