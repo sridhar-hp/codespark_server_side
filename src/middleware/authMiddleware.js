@@ -1,5 +1,5 @@
 // src/middleware/authMiddleware.js
-const AuthToken = require('../utils/authToken');
+const AuthToken = require('../models/AuthToken');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 const { error } = require('../utils/responseHandler');
