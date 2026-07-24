@@ -26,7 +26,10 @@ const protect = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
 // Check if the token still exists in the database
-const storedToken = await AuthToken.findOne({ token });
+const storedToken = await AuthToken.findOne({
+  token,
+  user: decoded.id,
+});
 
 if (!storedToken) {
   return error(res, new Error('Not authorized, token has been revoked'), 401);
