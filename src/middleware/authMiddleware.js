@@ -56,11 +56,11 @@ const protect = async (req, res, next) => {
  */
 const authorize =
   (...roles) =>
-  (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
-      return error(res, new Error("Forbidden: insufficient permissions"), 403);
-    }
-    next();
-  };
+    (req, res, next) => {
+      if (!roles.includes(req.user.role)) {
+        return error(res, new Error("Forbidden: insufficient permissions"), 403);
+      }
+      next();
+    };
 
 module.exports = { protect, authorize };

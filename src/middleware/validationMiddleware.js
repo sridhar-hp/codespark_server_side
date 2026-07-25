@@ -10,7 +10,10 @@ const { error } = require('../utils/responseHandler');
 const validate = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    return error(res, new Error('Validation failed'), 400);
+    const firstError = errors.array()[0]?.msg || 'Validation failed';
+    const err = new Error(firstError);
+    err.details = errors.array();
+    return error(res, err, 400);
   }
   next();
 };

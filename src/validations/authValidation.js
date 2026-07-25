@@ -9,8 +9,7 @@ exports.register = [
     .withMessage('Valid email required')
     .normalizeEmail(),
   body('password')
-    .custom(isStrongPassword)
-    .withMessage('Password does not meet strength requirements'),
+    .custom(isStrongPassword),
 ];
 
 exports.login = [
