@@ -24,7 +24,7 @@ class JournalService {
     const entry = await JournalEntry.findOneAndUpdate(
       { _id: entryId, user: userId },
       data,
-      { new: true, runValidators: true }
+      { returnDocument: 'after', runValidators: true }
     );
     if (!entry) {
       const err = new Error('Journal entry not found');

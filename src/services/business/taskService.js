@@ -26,7 +26,7 @@ class TaskService {
     const task = await Task.findOneAndUpdate(
       { _id: taskId, user: userId },
       updates,
-      { new: true, runValidators: true }
+      { returnDocument: 'after', runValidators: true }
     );
     if (!task) {
       const err = new Error('Task not found');

@@ -7,7 +7,7 @@ class XPService {
     const stats = await UserStats.findOneAndUpdate(
       { user: userId },
       { $inc: { totalXP: amount } },
-      { new: true, upsert: true }
+      { returnDocument: 'after', upsert: true }
     );
 
     const newLevel = calculateLevel(stats.totalXP);

@@ -6,6 +6,8 @@ const taskSchema = new mongoose.Schema(
     title: { type: String, required: true, trim: true },
     description: { type: String },
     completed: { type: Boolean, default: false },
+    category: { type: String, default: 'Development' },
+    priority: { type: String, default: 'Medium' },
     dueDate: { type: Date },
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     xpReward: { type: Number, default: 0 },

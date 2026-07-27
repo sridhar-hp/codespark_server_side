@@ -19,7 +19,7 @@ class UserService {
 
   static async updateProfile(userId, updates) {
     const user = await User.findByIdAndUpdate(userId, updates, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }).select('-password');
     if (!user) {
