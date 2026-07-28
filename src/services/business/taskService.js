@@ -62,6 +62,8 @@ class TaskService {
 
     if (task.completed && task.xpReward) {
       await xpService.addXP(userId, task.xpReward);
+    } else if (!task.completed && task.xpReward) {
+      await xpService.deductXP(userId, task.xpReward);
     }
     return task;
   }

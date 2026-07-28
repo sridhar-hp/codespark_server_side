@@ -14,7 +14,15 @@ class UserService {
       err.statusCode = 404;
       throw err;
     }
-    return user;
+    const userObj = user.toObject();
+    if (!userObj.stats) {
+      let stats = await UserStats.findOne({ user: userId });
+      if (!stats) {
+        stats = await UserStats.create({ user: userId, totalXP: 0 });
+      }
+      userObj.stats = stats;
+    }
+    return userObj;
   }
 
   static async updateProfile(userId, updates) {
