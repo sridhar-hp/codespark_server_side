@@ -7,6 +7,7 @@ const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
   password: { type: String, required: true },
   role: { type: String, enum: ['user', 'admin'], default: 'user' },
+  githubUsername: { type: String, default: '', trim: true },
   settings: { type: mongoose.Schema.Types.ObjectId, ref: 'UserSettings' },
   stats: { type: mongoose.Schema.Types.ObjectId, ref: 'UserStats' }
 }, { timestamps: true });
