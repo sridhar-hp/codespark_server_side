@@ -4,20 +4,17 @@ const { success, error } = require('../utils/responseHandler');
 
 exports.list = async (req, res) => {
   try {
-    const achievements = await AchievementService.list();
-    return success(res, achievements, 'Achievements listed');
+    const data = await AchievementService.getAchievements(req.user.id);
+    return success(res, data, 'Achievements fetched');
   } catch (err) {
     return error(res, err, err.statusCode || 500);
   }
 };
 
-exports.earn = async (req, res) => {
+exports.check = async (req, res) => {
   try {
-    const achievement = await AchievementService.earn(
-      req.user.id,
-      req.params.id
-    );
-    return success(res, achievement, 'Achievement earned');
+    const data = await AchievementService.getAchievements(req.user.id);
+    return success(res, data, 'Achievements checked and updated');
   } catch (err) {
     return error(res, err, err.statusCode || 500);
   }
