@@ -2,8 +2,9 @@
 const { body } = require('express-validator');
 
 exports.github = [
-  body('repo').trim().notEmpty(),
-  body('action').trim().notEmpty(),
+  body('githubUsername').optional().trim().notEmpty(),
+  body('repo').optional().trim().notEmpty(),
+  body('action').optional().trim().notEmpty(),
 ];
 
 exports.leetcode = [
