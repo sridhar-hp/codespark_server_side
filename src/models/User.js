@@ -8,6 +8,7 @@ const userSchema = new mongoose.Schema({
   password: { type: String, required: true },
   role: { type: String, enum: ['user', 'admin'], default: 'user' },
   githubUsername: { type: String, default: '', trim: true },
+  leetcodeUsername: { type: String, default: '', trim: true },
   settings: { type: mongoose.Schema.Types.ObjectId, ref: 'UserSettings' },
   stats: { type: mongoose.Schema.Types.ObjectId, ref: 'UserStats' }
 }, { timestamps: true });

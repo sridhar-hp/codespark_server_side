@@ -8,8 +8,9 @@ exports.github = [
 ];
 
 exports.leetcode = [
-  body('problemSlug').trim().notEmpty(),
-  body('status').isIn(['accepted', 'failed']),
+  body('leetcodeUsername').optional().trim().notEmpty(),
+  body('problemSlug').optional().trim().notEmpty(),
+  body('status').optional().isIn(['accepted', 'failed']),
 ];
 
 exports.learning = [
