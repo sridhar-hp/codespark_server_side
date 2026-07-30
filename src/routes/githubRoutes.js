@@ -9,6 +9,7 @@ const validate = require('../middleware/validationMiddleware');
 router.use(protect);
 
 router.post('/connect', githubValidate, validate, githubController.connectGithub);
+router.post('/sync', githubController.syncGithub);
 router.get('/profile', githubController.getGithubProfile);
 
 module.exports = router;

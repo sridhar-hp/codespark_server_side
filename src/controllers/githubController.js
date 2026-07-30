@@ -14,8 +14,18 @@ const connectGithub = async (req, res) => {
 
 const getGithubProfile = async (req, res) => {
   try {
-    const data = await GitHubService.getProfileAndRepos(req.user.id);
+    const forceSync = req.query.forceSync === 'true';
+    const data = await GitHubService.getProfileAndRepos(req.user.id, forceSync);
     return success(res, data, 'GitHub profile fetched');
+  } catch (err) {
+    return error(res, err, err.statusCode || 500);
+  }
+};
+
+const syncGithub = async (req, res) => {
+  try {
+    const data = await GitHubService.syncUserGitHub(req.user.id);
+    return success(res, data, 'GitHub profile synchronized');
   } catch (err) {
     return error(res, err, err.statusCode || 500);
   }
@@ -24,6 +34,8 @@ const getGithubProfile = async (req, res) => {
 module.exports = {
   connectGithub,
   getGithubProfile,
+  syncGithub,
   connect: connectGithub,
   getProfile: getGithubProfile,
+  sync: syncGithub,
 };

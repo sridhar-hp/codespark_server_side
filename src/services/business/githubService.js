@@ -1,5 +1,9 @@
 // src/services/business/githubService.js
 const User = require('../../models/User');
+const GitHubData = require('../../models/GitHubData');
+const GitHubRestService = require('../external/githubRestService');
+const GitHubGraphqlService = require('../external/githubGraphqlService');
+const GitHubCalculationService = require('./githubCalculationService');
 
 class GitHubService {
   static async connectUsername(userId, username) {
@@ -11,113 +15,91 @@ class GitHubService {
 
     const cleanUsername = username.trim();
 
-    // Validate username via GitHub REST API
-    const userRes = await fetch(`https://api.github.com/users/${encodeURIComponent(cleanUsername)}`, {
-      headers: {
-        'User-Agent': 'CodeSpark-App',
-        'Accept': 'application/vnd.github.v3+json',
+    // 1. Fetch REST Profile to validate username
+    const profile = await GitHubRestService.fetchProfile(cleanUsername);
+
+    // 2. Save username in User model
+    await User.findByIdAndUpdate(userId, { githubUsername: profile.username }, { new: true });
+
+    // 3. Trigger full sync to populate cache & calculated metrics
+    return await this.syncUserGitHub(userId, profile.username);
+  }
+
+  static async syncUserGitHub(userId, usernameOverride = null) {
+    const user = await User.findById(userId);
+    const username = usernameOverride || (user ? user.githubUsername : null);
+
+    if (!username) {
+      return {
+        connected: false,
+        profile: null,
+        repos: [],
+        contributions: null,
+        analytics: null,
+      };
+    }
+
+    // 1. Fetch live REST Profile & Repositories
+    const profile = await GitHubRestService.fetchProfile(username);
+    const repos = await GitHubRestService.fetchRepositories(username);
+
+    // 2. Fetch GraphQL Contribution Calendar
+    const calendarData = await GitHubGraphqlService.fetchContributionCalendar(username, repos);
+
+    // 3. Calculate all metrics inside CodeSpark
+    const analytics = GitHubCalculationService.calculateAll(profile, repos, calendarData);
+
+    // 4. Save cache to MongoDB GitHubData collection
+    await GitHubData.findOneAndUpdate(
+      { user: userId },
+      {
+        githubUsername: profile.username,
+        lastSync: new Date(),
+        cachedProfile: profile,
+        cachedRepositories: analytics.repos,
+        cachedContributionData: calendarData,
+        lastCalculatedMetrics: analytics,
       },
-    });
-
-    if (userRes.status === 404) {
-      const err = new Error(`GitHub user '${cleanUsername}' not found`);
-      err.statusCode = 404;
-      throw err;
-    }
-
-    if (!userRes.ok) {
-      const err = new Error(`GitHub API error (${userRes.status}): ${userRes.statusText}`);
-      err.statusCode = userRes.status;
-      throw err;
-    }
-
-    const profileData = await userRes.json();
-
-    const user = await User.findByIdAndUpdate(
-      userId,
-      { githubUsername: profileData.login },
-      { new: true }
+      { upsert: true, new: true }
     );
 
     return {
       connected: true,
-      githubUsername: user ? user.githubUsername : profileData.login,
+      profile,
+      repos: analytics.repos,
+      contributions: calendarData,
+      analytics,
     };
   }
 
-  static async getProfileAndRepos(userId) {
+  static async getProfileAndRepos(userId, forceSync = false) {
     const user = await User.findById(userId);
     if (!user || !user.githubUsername) {
       return {
         connected: false,
         profile: null,
         repos: [],
+        contributions: null,
+        analytics: null,
       };
     }
 
-    const username = user.githubUsername;
-
-    const profileRes = await fetch(`https://api.github.com/users/${encodeURIComponent(username)}`, {
-      headers: {
-        'User-Agent': 'CodeSpark-App',
-        'Accept': 'application/vnd.github.v3+json',
-      },
-    });
-
-    if (profileRes.status === 404) {
-      return {
-        connected: false,
-        profile: null,
-        repos: [],
-        error: `GitHub user '${username}' not found`,
-      };
+    // Check cached data in MongoDB
+    if (!forceSync) {
+      const cached = await GitHubData.findOne({ user: userId });
+      if (cached && cached.cachedProfile && cached.lastCalculatedMetrics) {
+        return {
+          connected: true,
+          profile: cached.cachedProfile,
+          repos: cached.lastCalculatedMetrics.repos || cached.cachedRepositories || [],
+          contributions: cached.cachedContributionData || null,
+          analytics: cached.lastCalculatedMetrics,
+        };
+      }
     }
 
-    if (!profileRes.ok) {
-      const err = new Error(`GitHub API error (${profileRes.status})`);
-      err.statusCode = profileRes.status;
-      throw err;
-    }
-
-    const profile = await profileRes.json();
-
-    const reposRes = await fetch(`https://api.github.com/users/${encodeURIComponent(username)}/repos?sort=updated&per_page=5`, {
-      headers: {
-        'User-Agent': 'CodeSpark-App',
-        'Accept': 'application/vnd.github.v3+json',
-      },
-    });
-
-    let repos = [];
-    if (reposRes.ok) {
-      const rawRepos = await reposRes.json();
-      repos = rawRepos.map((r) => ({
-        id: r.id,
-        name: r.name,
-        description: r.description || 'No description provided.',
-        htmlUrl: r.html_url,
-        stars: r.stargazers_count,
-        forks: r.forks_count,
-        language: r.language || 'Plain Text',
-        updatedAt: r.updated_at,
-      }));
-    }
-
-    return {
-      connected: true,
-      profile: {
-        username: profile.login,
-        name: profile.name || profile.login,
-        avatarUrl: profile.avatar_url,
-        bio: profile.bio || 'No bio provided.',
-        followers: profile.followers,
-        following: profile.following,
-        publicRepos: profile.public_repos,
-        createdAt: profile.created_at,
-        htmlUrl: profile.html_url,
-      },
-      repos,
-    };
+    // Cache miss or forceSync requested -> sync live GitHub data
+    return await this.syncUserGitHub(userId, user.githubUsername);
   }
 }
 
