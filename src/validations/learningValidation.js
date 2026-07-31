@@ -16,9 +16,11 @@ const create = [
   body('instructor').optional().isString().trim(),
   body('thumbnail').optional().isString().trim(),
   body('resourceUrl')
-    .optional({ checkFalsy: true })
+    .trim()
+    .notEmpty()
+    .withMessage('Please enter a valid learning resource URL.')
     .isURL()
-    .withMessage('Resource URL must be a valid URL'),
+    .withMessage('Please enter a valid learning resource URL.'),
   body('totalHours')
     .optional()
     .isFloat({ min: 0 })
@@ -55,9 +57,12 @@ const update = [
   body('instructor').optional().isString().trim(),
   body('thumbnail').optional().isString().trim(),
   body('resourceUrl')
-    .optional({ checkFalsy: true })
+    .optional()
+    .trim()
+    .notEmpty()
+    .withMessage('Please enter a valid learning resource URL.')
     .isURL()
-    .withMessage('Resource URL must be a valid URL'),
+    .withMessage('Please enter a valid learning resource URL.'),
   body('totalHours')
     .optional()
     .isFloat({ min: 0 })
