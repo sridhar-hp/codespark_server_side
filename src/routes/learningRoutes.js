@@ -21,6 +21,10 @@ router.use('/goals', learningGoalRoutes);
 // Learning Resource CRUD endpoints
 router.post(
   '/',
+  (req, res, next) => {
+    console.log('POST /api/v1/learning req.body before validation:', req.body);
+    next();
+  },
   learningValidation.create,
   validate,
   learningController.createLearning
