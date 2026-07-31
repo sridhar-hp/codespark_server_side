@@ -2,13 +2,23 @@
 const express = require('express');
 const router = express.Router();
 const learningController = require('../controllers/learningController');
+const learningAnalyticsController = require('../controllers/learningAnalyticsController');
 const learningValidation = require('../validations/learningValidation');
+const learningGoalRoutes = require('./learningGoalRoutes');
 const { protect } = require('../middleware/authMiddleware');
 const validate = require('../middleware/validationMiddleware');
 
 // Protect all learning routes with authentication middleware
 router.use(protect);
 
+// Analytics & Heatmap endpoints
+router.get('/analytics', learningAnalyticsController.getAnalytics);
+router.get('/heatmap', learningAnalyticsController.getHeatmap);
+
+// Learning Goals sub-router
+router.use('/goals', learningGoalRoutes);
+
+// Learning Resource CRUD endpoints
 router.post(
   '/',
   learningValidation.create,
