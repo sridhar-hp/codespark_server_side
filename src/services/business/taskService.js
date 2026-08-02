@@ -1,6 +1,7 @@
 // src/services/business/taskService.js
 const Task = require('../../models/Task');
 const xpService = require('./xpService');
+const notificationService = require('./notificationService');
 
 class TaskService {
   static async create(userId, data) {
@@ -43,7 +44,6 @@ class TaskService {
       err.statusCode = 404;
       throw err;
     }
-    // Remove XP if task had reward and was completed
     if (task.completed && task.xpReward) {
       await xpService.deductXP(userId, task.xpReward);
     }
@@ -60,8 +60,17 @@ class TaskService {
     task.completed = !task.completed;
     await task.save();
 
-    if (task.completed && task.xpReward) {
-      await xpService.addXP(userId, task.xpReward);
+    if (task.completed) {
+      if (task.xpReward) {
+        await xpService.addXP(userId, task.xpReward);
+      }
+      await notificationService.createNotification(userId, {
+        title: 'Task Completed!',
+        message: `Task "${task.title}" completed. Good job!`,
+        type: 'TASK',
+        relatedEntity: task._id,
+        relatedEntityType: 'Task',
+      });
     } else if (!task.completed && task.xpReward) {
       await xpService.deductXP(userId, task.xpReward);
     }

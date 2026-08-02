@@ -1,11 +1,9 @@
 // src/services/business/learningGoalService.js
 const LearningGoal = require('../../models/LearningGoal');
 const xpService = require('./xpService');
+const notificationService = require('./notificationService');
 
 class LearningGoalService {
-  /**
-   * Create a new learning goal for the authenticated user.
-   */
   static async createGoal(userId, data) {
     const goal = new LearningGoal({
       ...data,
@@ -14,17 +12,20 @@ class LearningGoalService {
     });
     await goal.save();
 
-    // Award +150 XP if completed
     if (goal.status === 'Completed' || goal.completedHours >= goal.targetHours) {
       await xpService.addXP(userId, 150);
+      await notificationService.createNotification(userId, {
+        title: 'Goal Achieved!',
+        message: `You completed your learning goal "${goal.title}"!`,
+        type: 'GOAL',
+        relatedEntity: goal._id,
+        relatedEntityType: 'LearningGoal',
+      });
     }
 
     return this.formatGoalResponse(goal);
   }
 
-  /**
-   * Get all learning goals for the authenticated user.
-   */
   static async getGoals(userId) {
     const goals = await LearningGoal.find({
       $or: [{ user: userId }, { userId: userId }],
@@ -33,9 +34,6 @@ class LearningGoalService {
     return goals.map((g) => this.formatGoalResponse(g));
   }
 
-  /**
-   * Get a single learning goal by ID.
-   */
   static async getGoalById(userId, goalId) {
     const goal = await LearningGoal.findOne({
       _id: goalId,
@@ -51,9 +49,6 @@ class LearningGoalService {
     return this.formatGoalResponse(goal);
   }
 
-  /**
-   * Update a learning goal for the authenticated user.
-   */
   static async updateGoal(userId, goalId, updateData) {
     const goal = await LearningGoal.findOne({
       _id: goalId,
@@ -71,17 +66,20 @@ class LearningGoalService {
     Object.assign(goal, updateData);
     await goal.save();
 
-    // Award +150 XP when newly completed
     if (!wasCompleted && (goal.status === 'Completed' || goal.completedHours >= goal.targetHours)) {
       await xpService.addXP(userId, 150);
+      await notificationService.createNotification(userId, {
+        title: 'Goal Achieved!',
+        message: `You completed your learning goal "${goal.title}"!`,
+        type: 'GOAL',
+        relatedEntity: goal._id,
+        relatedEntityType: 'LearningGoal',
+      });
     }
 
     return this.formatGoalResponse(goal);
   }
 
-  /**
-   * Delete a learning goal.
-   */
   static async deleteGoal(userId, goalId) {
     const goal = await LearningGoal.findOneAndDelete({
       _id: goalId,
@@ -97,9 +95,6 @@ class LearningGoalService {
     return goal;
   }
 
-  /**
-   * Helper to append goal Completion Percentage
-   */
   static formatGoalResponse(goal) {
     const doc = goal.toObject ? goal.toObject() : { ...goal };
     const completionPercentage = doc.targetHours > 0

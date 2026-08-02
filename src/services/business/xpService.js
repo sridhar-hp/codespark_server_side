@@ -1,6 +1,7 @@
 // src/services/business/xpService.js
 const UserStats = require('../../models/UserStats');
 const { calculateLevel } = require('../../utils/calculateLevel');
+const notificationService = require('./notificationService');
 
 class XPService {
   static async addXP(userId, amount) {
@@ -14,12 +15,17 @@ class XPService {
     if (newLevel !== stats.level) {
       stats.level = newLevel;
       await stats.save();
+
+      await notificationService.createNotification(userId, {
+        title: 'Level Up!',
+        message: `Congratulations! You reached Level ${newLevel}!`,
+        type: 'XP',
+      });
     }
     return stats;
   }
 
   static async deductXP(userId, amount) {
-    // Ensure totalXP never goes below zero
     const stats = await UserStats.findOne({ user: userId });
     if (!stats) return null;
     stats.totalXP = Math.max(0, stats.totalXP - amount);

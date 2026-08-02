@@ -3,6 +3,7 @@ const User = require("../../models/User");
 const generateTokens = require("../../utils/generateToken");
 const AuthToken = require("../../models/AuthToken");
 const RefreshToken = require("../../models/RefreshToken");
+const notificationService = require("../business/notificationService");
 
 class AuthService {
   static async register({ name, email, password }) {
@@ -16,6 +17,13 @@ class AuthService {
     const user = await User.create({ name, email, password });
     const payload = { id: user._id, role: user.role };
     const { accessToken, refreshToken } = generateTokens(payload);
+
+    // Create system welcome notification
+    await notificationService.createNotification(user._id, {
+      title: "Welcome to CodeSpark!",
+      message: "Your developer journey begins now. Complete tasks, track learning, and level up!",
+      type: "SYSTEM",
+    });
 
     // Store tokens for revocation support
     await AuthToken.create({
@@ -97,7 +105,6 @@ class AuthService {
     const payload = { id: user._id, role: user.role };
     const { accessToken, refreshToken: newRefresh } = generateTokens(payload);
 
-    // Rotate refresh token
     await RefreshToken.deleteOne({ _id: stored._id });
     await RefreshToken.create({
       user: user._id,
@@ -116,7 +123,6 @@ class AuthService {
 
   static async logout({ accessToken }) {
     await AuthToken.deleteOne({ token: accessToken });
-    // Front‑end should also delete its stored tokens
   }
 }
 

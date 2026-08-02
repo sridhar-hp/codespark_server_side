@@ -2,13 +2,16 @@
 const StudySession = require('../../models/StudySession');
 const Learning = require('../../models/Learning');
 const xpService = require('./xpService');
+const notificationService = require('./notificationService');
 
 class StudySessionService {
   /**
    * Helper method to recalculate and save Learning course progress and status.
    */
-  static async updateLearningProgress(learning) {
+  static async updateLearningProgress(learning, userId) {
     if (!learning) return;
+
+    const wasCompleted = learning.status === 'Completed';
 
     if (learning.totalHours > 0) {
       if (learning.completedHours > learning.totalHours) {
@@ -32,6 +35,17 @@ class StudySessionService {
     }
 
     await learning.save();
+
+    // Trigger notification if newly completed
+    if (!wasCompleted && learning.status === 'Completed' && userId) {
+      await notificationService.createNotification(userId, {
+        title: 'Course Mastered!',
+        message: `Congratulations on completing "${learning.title}"!`,
+        type: 'LEARNING',
+        relatedEntity: learning._id,
+        relatedEntityType: 'Learning',
+      });
+    }
   }
 
   /**
@@ -62,7 +76,6 @@ class StudySessionService {
     const todayStr = new Date().toISOString().split('T')[0];
     const yesterdayStr = new Date(Date.now() - 86400000).toISOString().split('T')[0];
 
-    // Current streak
     let checkDate = new Date(todayStr);
     if (!uniqueDates.has(todayStr) && uniqueDates.has(yesterdayStr)) {
       checkDate = new Date(yesterdayStr);
@@ -73,7 +86,6 @@ class StudySessionService {
       checkDate.setDate(checkDate.getDate() - 1);
     }
 
-    // Longest streak
     for (let i = 0; i < sortedDates.length; i++) {
       if (i === 0) {
         tempStreak = 1;
@@ -99,12 +111,11 @@ class StudySessionService {
   }
 
   /**
-   * Create a new Study Session, update course progress, and trigger XP rules.
+   * Create a new Study Session, update course progress, and trigger XP & streak notifications.
    */
   static async createStudySession(userId, data) {
     const { learningId, durationMinutes, studyDate, notes } = data;
 
-    // 1. Verify Learning resource exists and belongs to current user
     const learning = await Learning.findOne({
       _id: learningId,
       $or: [{ user: userId }, { userId: userId }],
@@ -118,7 +129,6 @@ class StudySessionService {
 
     const wasCompleted = learning.status === 'Completed';
 
-    // 2. Create and save StudySession
     const session = new StudySession({
       user: userId,
       userId: userId,
@@ -129,35 +139,37 @@ class StudySessionService {
     });
     await session.save();
 
-    // 3. Automatically update Learning completedHours
     const addedHours = durationMinutes / 60;
     learning.completedHours = (learning.completedHours || 0) + addedHours;
-    await this.updateLearningProgress(learning);
+    await this.updateLearningProgress(learning, userId);
 
-    // 4. XP Integration Rules
-    // Rule A: Study Session duration XP (30m -> 20 XP, 60m -> 40 XP)
     const sessionXP = Math.max(10, Math.round(durationMinutes * (40 / 60)));
     await xpService.addXP(userId, sessionXP);
 
-    // Rule B: Complete Course (+100 XP)
     if (!wasCompleted && learning.status === 'Completed') {
       await xpService.addXP(userId, 100);
     }
 
-    // Rule C: Streak Milestones (7 days -> 50 XP, 30 days -> 250 XP)
     const { currentStreak } = await this.calculateStreak(userId);
     if (currentStreak === 7) {
       await xpService.addXP(userId, 50);
+      await notificationService.createNotification(userId, {
+        title: '7-Day Streak!',
+        message: 'You achieved a 7-day learning streak! Keep it up!',
+        type: 'STREAK',
+      });
     } else if (currentStreak === 30) {
       await xpService.addXP(userId, 250);
+      await notificationService.createNotification(userId, {
+        title: '30-Day Streak!',
+        message: 'Unstoppable! You achieved a 30-day streak!',
+        type: 'STREAK',
+      });
     }
 
     return await StudySession.findById(session._id).populate('learningId');
   }
 
-  /**
-   * Get all study sessions for the authenticated user.
-   */
   static async getStudySessions(userId, filters = {}) {
     const query = {
       $or: [{ user: userId }, { userId: userId }],
@@ -172,9 +184,6 @@ class StudySessionService {
       .sort({ studyDate: -1, createdAt: -1 });
   }
 
-  /**
-   * Get a single study session by ID for the authenticated user.
-   */
   static async getStudySession(userId, sessionId) {
     const session = await StudySession.findOne({
       _id: sessionId,
@@ -190,9 +199,6 @@ class StudySessionService {
     return session;
   }
 
-  /**
-   * Update a study session for the authenticated user and adjust course progress if duration changes.
-   */
   static async updateStudySession(userId, sessionId, updateData) {
     const session = await StudySession.findOne({
       _id: sessionId,
@@ -232,16 +238,13 @@ class StudySessionService {
       if (learning) {
         const diffHours = (updateData.durationMinutes - oldDuration) / 60;
         learning.completedHours = Math.max(0, (learning.completedHours || 0) + diffHours);
-        await this.updateLearningProgress(learning);
+        await this.updateLearningProgress(learning, userId);
       }
     }
 
     return await StudySession.findById(session._id).populate('learningId');
   }
 
-  /**
-   * Delete a study session for the authenticated user and deduct study time from the course.
-   */
   static async deleteStudySession(userId, sessionId) {
     const session = await StudySession.findOneAndDelete({
       _id: sessionId,
@@ -262,7 +265,7 @@ class StudySessionService {
     if (learning) {
       const deductedHours = session.durationMinutes / 60;
       learning.completedHours = Math.max(0, (learning.completedHours || 0) - deductedHours);
-      await this.updateLearningProgress(learning);
+      await this.updateLearningProgress(learning, userId);
     }
 
     return session;

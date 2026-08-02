@@ -2,6 +2,8 @@
 const Achievement = require('../../models/Achievement');
 const Task = require('../../models/Task');
 const UserStats = require('../../models/UserStats');
+const { calculateLevel } = require('../../utils/calculateLevel');
+const notificationService = require('./notificationService');
 
 const SYSTEM_ACHIEVEMENTS = [
   // Task Achievements
@@ -58,34 +60,34 @@ const SYSTEM_ACHIEVEMENTS = [
     condition: (tasksCount, xp, level) => xp >= 100,
   },
   {
-    key: 'xp_explorer',
-    title: 'Explorer',
+    key: 'xp_warrior',
+    title: 'XP Warrior',
     description: 'Earn 500 XP',
     category: 'xp',
-    icon: 'Compass',
+    icon: 'Flame',
     target: 500,
     targetType: 'xp',
     condition: (tasksCount, xp, level) => xp >= 500,
   },
   {
-    key: 'xp_champion',
-    title: 'Champion',
-    description: 'Earn 1000 XP',
+    key: 'xp_master',
+    title: 'XP Master',
+    description: 'Earn 2,000 XP',
     category: 'xp',
-    icon: 'Award',
-    target: 1000,
+    icon: 'Trophy',
+    target: 2000,
     targetType: 'xp',
-    condition: (tasksCount, xp, level) => xp >= 1000,
+    condition: (tasksCount, xp, level) => xp >= 2000,
   },
   {
-    key: 'xp_master',
-    title: 'Master',
-    description: 'Earn 5000 XP',
+    key: 'xp_god',
+    title: 'XP God',
+    description: 'Earn 10,000 XP',
     category: 'xp',
-    icon: 'Star',
-    target: 5000,
+    icon: 'Crown',
+    target: 10000,
     targetType: 'xp',
-    condition: (tasksCount, xp, level) => xp >= 5000,
+    condition: (tasksCount, xp, level) => xp >= 10000,
   },
 
   // Level Achievements
@@ -94,7 +96,7 @@ const SYSTEM_ACHIEVEMENTS = [
     title: 'Level 5',
     description: 'Reach Level 5',
     category: 'level',
-    icon: 'Trophy',
+    icon: 'Award',
     target: 5,
     targetType: 'level',
     condition: (tasksCount, xp, level) => level >= 5,
@@ -114,7 +116,7 @@ const SYSTEM_ACHIEVEMENTS = [
     title: 'Level 25',
     description: 'Reach Level 25',
     category: 'level',
-    icon: 'Shield',
+    icon: 'Zap',
     target: 25,
     targetType: 'level',
     condition: (tasksCount, xp, level) => level >= 25,
@@ -133,17 +135,27 @@ const SYSTEM_ACHIEVEMENTS = [
 
 class AchievementService {
   static async checkAndUnlock(userId) {
-    const tasksCount = await Task.countDocuments({ user: userId, completed: true });
-    const stats = await UserStats.findOne({ user: userId });
+    const tasksCount = await Task.countDocuments({
+      $or: [{ user: userId }, { userId: userId }],
+      completed: true,
+    });
+    const stats = await UserStats.findOne({
+      $or: [{ user: userId }, { userId: userId }],
+    });
     const xp = stats ? stats.totalXP : 0;
-    const level = stats ? stats.level : 1;
+    const level = stats ? (stats.level || calculateLevel(xp)) : calculateLevel(xp);
 
     for (const def of SYSTEM_ACHIEVEMENTS) {
       if (def.condition(tasksCount, xp, level)) {
-        const existing = await Achievement.findOne({ user: userId, key: def.key });
+        const existing = await Achievement.findOne({
+          $or: [{ user: userId }, { userId: userId }],
+          key: def.key,
+        });
+
         if (!existing) {
           await Achievement.create({
             user: userId,
+            userId: userId,
             key: def.key,
             title: def.title,
             description: def.description,
@@ -151,27 +163,37 @@ class AchievementService {
             icon: def.icon,
             unlockedAt: new Date(),
           });
+
+          await notificationService.createNotification(userId, {
+            title: 'Achievement Unlocked!',
+            message: `You unlocked "${def.title}"! ${def.description}`,
+            type: 'ACHIEVEMENT',
+          });
         }
       }
     }
   }
 
   static async getAchievements(userId) {
-    // 1. Evaluate conditions and auto-unlock
     await this.checkAndUnlock(userId);
 
-    // 2. Fetch live metrics from MongoDB
-    const tasksCount = await Task.countDocuments({ user: userId, completed: true });
-    const stats = await UserStats.findOne({ user: userId });
+    const tasksCount = await Task.countDocuments({
+      $or: [{ user: userId }, { userId: userId }],
+      completed: true,
+    });
+    const stats = await UserStats.findOne({
+      $or: [{ user: userId }, { userId: userId }],
+    });
     const xp = stats ? stats.totalXP : 0;
-    const level = stats ? stats.level : 1;
+    const level = stats ? (stats.level || calculateLevel(xp)) : calculateLevel(xp);
 
-    // 3. Fetch unlocked achievements for user from MongoDB
-    const unlockedDocs = await Achievement.find({ user: userId }).sort({ unlockedAt: -1, _id: -1 });
+    const unlockedDocs = await Achievement.find({
+      $or: [{ user: userId }, { userId: userId }],
+    }).sort({ unlockedAt: -1, _id: -1 });
+
     const unlockedMap = new Map();
     unlockedDocs.forEach((doc) => unlockedMap.set(doc.key, doc));
 
-    // 4. Map achievements with live progress
     const achievements = SYSTEM_ACHIEVEMENTS.map((def) => {
       const doc = unlockedMap.get(def.key);
       let currentVal = 0;
@@ -179,60 +201,82 @@ class AchievementService {
       if (def.targetType === 'xp') currentVal = xp;
       if (def.targetType === 'level') currentVal = level;
 
-      const progressPct = Math.min(100, Math.max(0, Math.round((currentVal / def.target) * 100)));
-
-      let progressLabel = '';
-      if (def.targetType === 'task') progressLabel = `${currentVal} / ${def.target} tasks`;
-      if (def.targetType === 'xp') progressLabel = `${currentVal} / ${def.target} XP`;
-      if (def.targetType === 'level') progressLabel = `Level ${currentVal} / ${def.target}`;
+      const progress = Math.min(100, Math.round((currentVal / def.target) * 100));
+      const isUnlocked = Boolean(doc);
 
       return {
+        id: doc ? doc._id : def.key,
         key: def.key,
         title: def.title,
         description: def.description,
         category: def.category,
         icon: def.icon,
-        unlocked: !!doc,
-        unlockedAt: doc ? doc.unlockedAt : null,
-        current: currentVal,
         target: def.target,
-        targetType: def.targetType,
-        progressPct,
-        progressLabel,
+        current: currentVal,
+        progress: isUnlocked ? 100 : progress,
+        progressPct: isUnlocked ? 100 : progress,
+        progressLabel: `${currentVal}/${def.target}`,
+        isUnlocked: isUnlocked,
+        unlocked: isUnlocked,
+        unlockedAt: doc ? doc.unlockedAt : null,
       };
     });
 
-    // 5. Calculate summary statistics strictly from system & MongoDB records
-    const totalCount = achievements.length;
-    const unlockedCount = achievements.filter((a) => a.unlocked).length;
-    const lockedCount = Math.max(0, totalCount - unlockedCount);
-    const completionRate = totalCount > 0 ? Math.round((unlockedCount / totalCount) * 100) : 0;
+    const totalBadges = achievements.length;
+    const unlocked = achievements.filter((a) => a.unlocked).length;
+    const locked = totalBadges - unlocked;
+    const completion = Math.round((unlocked / totalBadges) * 100);
 
-    // 6. Latest Unlocked Badge (newest unlockedAt timestamp from MongoDB)
-    const latestDoc = unlockedDocs[0] || null;
-    const latestUnlocked = latestDoc
-      ? achievements.find((a) => a.key === latestDoc.key) || null
-      : null;
+    const latestUnlockedDoc = unlockedDocs[0] || null;
+    let latestUnlockedBadge = null;
 
-    // 7. Next Goal: Nearest locked achievement based on current Task count, XP, or Level
-    const lockedList = achievements.filter((a) => !a.unlocked);
-    lockedList.sort((a, b) => {
-      if (b.progressPct !== a.progressPct) {
-        return b.progressPct - a.progressPct; // Highest completion % first
-      }
-      // Secondary sort: smallest remaining distance to target
-      const remainingA = Math.max(0, a.target - a.current);
-      const remainingB = Math.max(0, b.target - b.current);
-      return remainingA - remainingB;
-    });
-    const nextGoal = lockedList[0] || null;
+    if (latestUnlockedDoc) {
+      const def = SYSTEM_ACHIEVEMENTS.find((a) => a.key === latestUnlockedDoc.key);
+      latestUnlockedBadge = {
+        title: latestUnlockedDoc.title,
+        description: latestUnlockedDoc.description,
+        unlockedAt: latestUnlockedDoc.unlockedAt,
+        icon: latestUnlockedDoc.icon,
+        category: latestUnlockedDoc.category,
+        key: latestUnlockedDoc.key,
+        target: def ? def.target : 1,
+      };
+    }
+
+    const lockedAchievements = achievements.filter((a) => !a.unlocked);
+    let nextGoal = null;
+
+    if (lockedAchievements.length > 0) {
+      lockedAchievements.sort((a, b) => b.progress - a.progress);
+      const nearest = lockedAchievements[0];
+      nextGoal = {
+        title: nearest.title,
+        description: nearest.description,
+        progress: nearest.progress,
+        progressPct: nearest.progress,
+        progressLabel: nearest.progressLabel,
+        category: nearest.category,
+        icon: nearest.icon,
+        key: nearest.key,
+        target: nearest.target,
+        current: nearest.current,
+      };
+    }
 
     return {
-      totalCount,
-      unlockedCount,
-      lockedCount,
-      completionRate,
-      latestUnlocked,
+      summary: {
+        totalBadges,
+        unlocked,
+        locked,
+        completion,
+        latestUnlockedBadge,
+        nextGoal,
+      },
+      totalCount: totalBadges,
+      unlockedCount: unlocked,
+      lockedCount: locked,
+      completionRate: completion,
+      latestUnlocked: latestUnlockedBadge,
       nextGoal,
       achievements,
     };
