@@ -1,5 +1,6 @@
 // src/services/business/learningService.js
 const Learning = require('../../models/Learning');
+const activityService = require('./activityService');
 
 class LearningService {
   /**
@@ -12,6 +13,16 @@ class LearningService {
       userId: userId,
     });
     await learning.save();
+
+    await activityService.createActivity(userId, {
+      activityType: 'LEARNING_CREATED',
+      module: 'learning',
+      title: 'Learning Path Created',
+      description: learning.title,
+      icon: 'BookOpen',
+      color: 'amber',
+    });
+
     return learning;
   }
 
@@ -71,6 +82,16 @@ class LearningService {
 
     Object.assign(learning, updateData);
     await learning.save();
+
+    await activityService.createActivity(userId, {
+      activityType: 'LEARNING_UPDATED',
+      module: 'learning',
+      title: 'Learning Path Updated',
+      description: learning.title,
+      icon: 'BookOpen',
+      color: 'amber',
+    });
+
     return learning;
   }
 

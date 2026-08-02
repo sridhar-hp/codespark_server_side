@@ -2,10 +2,21 @@
 const Task = require('../../models/Task');
 const xpService = require('./xpService');
 const notificationService = require('./notificationService');
+const activityService = require('./activityService');
 
 class TaskService {
   static async create(userId, data) {
     const task = await Task.create({ ...data, user: userId });
+
+    await activityService.createActivity(userId, {
+      activityType: 'TASK_CREATED',
+      module: 'tasks',
+      title: 'Task Created',
+      description: task.title,
+      icon: 'CheckSquare',
+      color: 'amber',
+    });
+
     return task;
   }
 
@@ -44,6 +55,16 @@ class TaskService {
       err.statusCode = 404;
       throw err;
     }
+
+    await activityService.createActivity(userId, {
+      activityType: 'TASK_DELETED',
+      module: 'tasks',
+      title: 'Task Deleted',
+      description: task.title,
+      icon: 'Trash2',
+      color: 'red',
+    });
+
     if (task.completed && task.xpReward) {
       await xpService.deductXP(userId, task.xpReward);
     }
@@ -70,6 +91,15 @@ class TaskService {
         type: 'TASK',
         relatedEntity: task._id,
         relatedEntityType: 'Task',
+      });
+
+      await activityService.createActivity(userId, {
+        activityType: 'TASK_COMPLETED',
+        module: 'tasks',
+        title: 'Task Completed',
+        description: task.title,
+        icon: 'CheckCircle2',
+        color: 'emerald',
       });
     } else if (!task.completed && task.xpReward) {
       await xpService.deductXP(userId, task.xpReward);

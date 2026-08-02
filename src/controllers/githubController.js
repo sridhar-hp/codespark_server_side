@@ -1,6 +1,7 @@
 // src/controllers/githubController.js
 const GitHubService = require('../services/business/githubService');
 const notificationService = require('../services/business/notificationService');
+const activityService = require('../services/business/activityService');
 const { success, error } = require('../utils/responseHandler');
 
 const connectGithub = async (req, res) => {
@@ -12,6 +13,15 @@ const connectGithub = async (req, res) => {
       title: 'GitHub Connected',
       message: `Your GitHub account "${githubUsername}" has been connected!`,
       type: 'GITHUB',
+    });
+
+    await activityService.createActivity(req.user.id, {
+      activityType: 'GITHUB_CONNECTED',
+      module: 'github',
+      title: 'GitHub Connected',
+      description: `Connected account "${githubUsername}"`,
+      icon: 'Github',
+      color: 'cyan',
     });
 
     return success(res, result, 'GitHub account connected successfully');
@@ -38,6 +48,15 @@ const syncGithub = async (req, res) => {
       title: 'GitHub Sync Completed',
       message: 'Your GitHub profile and contribution data have been synchronized.',
       type: 'GITHUB',
+    });
+
+    await activityService.createActivity(req.user.id, {
+      activityType: 'GITHUB_SYNCED',
+      module: 'github',
+      title: 'GitHub Synchronized',
+      description: 'Latest repository & commit data synced',
+      icon: 'GitPullRequest',
+      color: 'cyan',
     });
 
     return success(res, data, 'GitHub profile synchronized');

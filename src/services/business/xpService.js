@@ -2,6 +2,7 @@
 const UserStats = require('../../models/UserStats');
 const { calculateLevel } = require('../../utils/calculateLevel');
 const notificationService = require('./notificationService');
+const activityService = require('./activityService');
 
 class XPService {
   static async addXP(userId, amount) {
@@ -10,6 +11,15 @@ class XPService {
       { $inc: { totalXP: amount } },
       { returnDocument: 'after', upsert: true, setDefaultsOnInsert: true }
     );
+
+    await activityService.createActivity(userId, {
+      activityType: 'XP_EARNED',
+      module: 'xp',
+      title: 'XP Earned',
+      description: `+${amount} XP awarded`,
+      icon: 'Sparkles',
+      color: 'amber',
+    });
 
     const newLevel = calculateLevel(stats.totalXP);
     if (newLevel !== stats.level) {

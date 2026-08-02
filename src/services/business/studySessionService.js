@@ -3,6 +3,7 @@ const StudySession = require('../../models/StudySession');
 const Learning = require('../../models/Learning');
 const xpService = require('./xpService');
 const notificationService = require('./notificationService');
+const activityService = require('./activityService');
 
 class StudySessionService {
   /**
@@ -36,7 +37,6 @@ class StudySessionService {
 
     await learning.save();
 
-    // Trigger notification if newly completed
     if (!wasCompleted && learning.status === 'Completed' && userId) {
       await notificationService.createNotification(userId, {
         title: 'Course Mastered!',
@@ -111,7 +111,7 @@ class StudySessionService {
   }
 
   /**
-   * Create a new Study Session, update course progress, and trigger XP & streak notifications.
+   * Create a new Study Session, update course progress, and trigger XP, streak, & activity records.
    */
   static async createStudySession(userId, data) {
     const { learningId, durationMinutes, studyDate, notes } = data;
@@ -149,6 +149,15 @@ class StudySessionService {
     if (!wasCompleted && learning.status === 'Completed') {
       await xpService.addXP(userId, 100);
     }
+
+    await activityService.createActivity(userId, {
+      activityType: 'SESSION_LOGGED',
+      module: 'learning',
+      title: 'Learning Session Logged',
+      description: `${durationMinutes} mins study session on "${learning.title}"`,
+      icon: 'Clock',
+      color: 'emerald',
+    });
 
     const { currentStreak } = await this.calculateStreak(userId);
     if (currentStreak === 7) {
