@@ -3,13 +3,22 @@ const express = require('express');
 const router = express.Router();
 const journalController = require('../controllers/journalController');
 const { protect } = require('../middleware/authMiddleware');
-const journalValidate = require('../validations/journalValidation');
 const validate = require('../middleware/validationMiddleware');
+const {
+  validateCreateJournal,
+  validateUpdateJournal,
+  validateJournalId,
+} = require('../validations/journalValidation');
 
 router.use(protect);
 
-router.post('/', journalValidate.create, validate, journalController.create);
-router.get('/', journalController.list);
-router.put('/:id', journalValidate.create, validate, journalController.update);
-router.delete('/:id', journalController.delete);
+router.get('/', journalController.getJournals);
+router.get('/stats', journalController.getJournalStats);
+router.get('/:id', validateJournalId, validate, journalController.getJournalById);
+router.post('/', validateCreateJournal, validate, journalController.createJournal);
+router.put('/:id', validateUpdateJournal, validate, journalController.updateJournal);
+router.delete('/:id', validateJournalId, validate, journalController.deleteJournal);
+router.patch('/:id/favorite', validateJournalId, validate, journalController.toggleFavorite);
+router.patch('/:id/pin', validateJournalId, validate, journalController.togglePin);
+
 module.exports = router;

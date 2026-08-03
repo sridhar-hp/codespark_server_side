@@ -2,6 +2,7 @@
 const Achievement = require('../../models/Achievement');
 const Task = require('../../models/Task');
 const UserStats = require('../../models/UserStats');
+const Journal = require('../../models/Journal');
 const { calculateLevel } = require('../../utils/calculateLevel');
 const notificationService = require('./notificationService');
 
@@ -15,7 +16,7 @@ const SYSTEM_ACHIEVEMENTS = [
     icon: 'CheckSquare',
     target: 1,
     targetType: 'task',
-    condition: (tasksCount, xp, level) => tasksCount >= 1,
+    condition: (tasksCount) => tasksCount >= 1,
   },
   {
     key: 'task_master',
@@ -25,7 +26,7 @@ const SYSTEM_ACHIEVEMENTS = [
     icon: 'CheckCircle2',
     target: 10,
     targetType: 'task',
-    condition: (tasksCount, xp, level) => tasksCount >= 10,
+    condition: (tasksCount) => tasksCount >= 10,
   },
   {
     key: 'productivity_pro',
@@ -35,7 +36,7 @@ const SYSTEM_ACHIEVEMENTS = [
     icon: 'Zap',
     target: 50,
     targetType: 'task',
-    condition: (tasksCount, xp, level) => tasksCount >= 50,
+    condition: (tasksCount) => tasksCount >= 50,
   },
   {
     key: 'legend',
@@ -45,7 +46,69 @@ const SYSTEM_ACHIEVEMENTS = [
     icon: 'Crown',
     target: 100,
     targetType: 'task',
-    condition: (tasksCount, xp, level) => tasksCount >= 100,
+    condition: (tasksCount) => tasksCount >= 100,
+  },
+
+  // Journal Achievements
+  {
+    key: 'first_journal',
+    title: 'First Journal',
+    description: 'Write 1 journal entry',
+    category: 'journal',
+    icon: 'BookOpen',
+    target: 1,
+    targetType: 'journal',
+    condition: (tasksCount, xp, level, journalCount) => journalCount >= 1,
+  },
+  {
+    key: 'journal_10',
+    title: '10 Journals',
+    description: 'Write 10 journal entries',
+    category: 'journal',
+    icon: 'BookOpen',
+    target: 10,
+    targetType: 'journal',
+    condition: (tasksCount, xp, level, journalCount) => journalCount >= 10,
+  },
+  {
+    key: 'journal_50',
+    title: '50 Journals',
+    description: 'Write 50 journal entries',
+    category: 'journal',
+    icon: 'BookOpen',
+    target: 50,
+    targetType: 'journal',
+    condition: (tasksCount, xp, level, journalCount) => journalCount >= 50,
+  },
+  {
+    key: 'journal_100',
+    title: '100 Journals',
+    description: 'Write 100 journal entries',
+    category: 'journal',
+    icon: 'Crown',
+    target: 100,
+    targetType: 'journal',
+    condition: (tasksCount, xp, level, journalCount) => journalCount >= 100,
+  },
+  {
+    key: 'journal_7_streak',
+    title: '7 Day Writer',
+    description: 'Maintain a 7-day writing streak',
+    category: 'journal',
+    icon: 'Flame',
+    target: 7,
+    targetType: 'journal_streak',
+    condition: (tasksCount, xp, level, journalCount, streak) => streak >= 7,
+  },
+  {
+    key: 'journal_30_streak',
+    title: '30 Day Writer',
+    description: 'Maintain a 30-day writing streak',
+    category: 'journal',
+    icon: 'Star',
+    target: 30,
+    targetType: 'journal_streak',
+    condition: (tasksCount, xp, level, journalCount, streak) => streak >= 30,
   },
 
   // XP Achievements
@@ -57,7 +120,7 @@ const SYSTEM_ACHIEVEMENTS = [
     icon: 'Sparkles',
     target: 100,
     targetType: 'xp',
-    condition: (tasksCount, xp, level) => xp >= 100,
+    condition: (tasksCount, xp) => xp >= 100,
   },
   {
     key: 'xp_warrior',
@@ -67,7 +130,7 @@ const SYSTEM_ACHIEVEMENTS = [
     icon: 'Flame',
     target: 500,
     targetType: 'xp',
-    condition: (tasksCount, xp, level) => xp >= 500,
+    condition: (tasksCount, xp) => xp >= 500,
   },
   {
     key: 'xp_master',
@@ -77,7 +140,7 @@ const SYSTEM_ACHIEVEMENTS = [
     icon: 'Trophy',
     target: 2000,
     targetType: 'xp',
-    condition: (tasksCount, xp, level) => xp >= 2000,
+    condition: (tasksCount, xp) => xp >= 2000,
   },
   {
     key: 'xp_god',
@@ -87,7 +150,7 @@ const SYSTEM_ACHIEVEMENTS = [
     icon: 'Crown',
     target: 10000,
     targetType: 'xp',
-    condition: (tasksCount, xp, level) => xp >= 10000,
+    condition: (tasksCount, xp) => xp >= 10000,
   },
 
   // Level Achievements
@@ -139,14 +202,40 @@ class AchievementService {
       $or: [{ user: userId }, { userId: userId }],
       completed: true,
     });
+    const journalCount = await Journal.countDocuments({
+      $or: [{ user: userId }, { userId: userId }],
+    });
     const stats = await UserStats.findOne({
       $or: [{ user: userId }, { userId: userId }],
     });
     const xp = stats ? stats.totalXP : 0;
     const level = stats ? (stats.level || calculateLevel(xp)) : calculateLevel(xp);
 
+    // Calculate streak count safely
+    let journalStreak = 0;
+    const journals = await Journal.find({
+      $or: [{ user: userId }, { userId: userId }],
+    }).sort({ createdAt: -1 }).select('createdAt').lean();
+
+    if (journals && journals.length > 0) {
+      const uniqueDates = new Set();
+      journals.forEach((j) => {
+        if (j.createdAt) uniqueDates.add(new Date(j.createdAt).toISOString().split('T')[0]);
+      });
+      const todayStr = new Date().toISOString().split('T')[0];
+      const yesterdayStr = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+      let checkDate = new Date(todayStr);
+      if (!uniqueDates.has(todayStr) && uniqueDates.has(yesterdayStr)) {
+        checkDate = new Date(yesterdayStr);
+      }
+      while (uniqueDates.has(checkDate.toISOString().split('T')[0])) {
+        journalStreak++;
+        checkDate.setDate(checkDate.getDate() - 1);
+      }
+    }
+
     for (const def of SYSTEM_ACHIEVEMENTS) {
-      if (def.condition(tasksCount, xp, level)) {
+      if (def.condition(tasksCount, xp, level, journalCount, journalStreak)) {
         const existing = await Achievement.findOne({
           $or: [{ user: userId }, { userId: userId }],
           key: def.key,
@@ -181,6 +270,9 @@ class AchievementService {
       $or: [{ user: userId }, { userId: userId }],
       completed: true,
     });
+    const journalCount = await Journal.countDocuments({
+      $or: [{ user: userId }, { userId: userId }],
+    });
     const stats = await UserStats.findOne({
       $or: [{ user: userId }, { userId: userId }],
     });
@@ -198,6 +290,7 @@ class AchievementService {
       const doc = unlockedMap.get(def.key);
       let currentVal = 0;
       if (def.targetType === 'task') currentVal = tasksCount;
+      if (def.targetType === 'journal') currentVal = journalCount;
       if (def.targetType === 'xp') currentVal = xp;
       if (def.targetType === 'level') currentVal = level;
 

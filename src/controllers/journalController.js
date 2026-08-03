@@ -2,42 +2,94 @@
 const JournalService = require('../services/business/journalService');
 const { success, error } = require('../utils/responseHandler');
 
-exports.create = async (req, res) => {
+const createJournal = async (req, res) => {
   try {
-    const entry = await JournalService.create(req.user.id, req.body);
-    return success(res, entry, 'Journal entry created', 201);
+    const journal = await JournalService.createJournal(req.user.id, req.body);
+    return success(res, journal, 'Journal entry created successfully', 201);
   } catch (err) {
     return error(res, err, err.statusCode || 500);
   }
 };
 
-exports.list = async (req, res) => {
+const getJournals = async (req, res) => {
   try {
-    const entries = await JournalService.list(req.user.id);
-    return success(res, entries, 'Journal entries retrieved');
+    const { search, mood, tag, isFavorite, isPinned, sortBy, limit } = req.query;
+    const result = await JournalService.getJournals(req.user.id, {
+      search,
+      mood,
+      tag,
+      isFavorite,
+      isPinned,
+      sortBy,
+      limit,
+    });
+    return success(res, result, 'Journals retrieved successfully');
   } catch (err) {
     return error(res, err, err.statusCode || 500);
   }
 };
 
-exports.update = async (req, res) => {
+const getJournalStats = async (req, res) => {
   try {
-    const entry = await JournalService.update(
-      req.params.id,
-      req.user.id,
-      req.body
-    );
-    return success(res, entry, 'Journal entry updated');
+    const stats = await JournalService.getJournalStats(req.user.id);
+    return success(res, stats, 'Journal stats retrieved successfully');
   } catch (err) {
     return error(res, err, err.statusCode || 500);
   }
 };
 
-exports.delete = async (req, res) => {
+const getJournalById = async (req, res) => {
   try {
-    await JournalService.delete(req.params.id, req.user.id);
-    return success(res, null, 'Journal entry deleted', 204);
+    const journal = await JournalService.getJournalById(req.user.id, req.params.id);
+    return success(res, journal, 'Journal entry retrieved successfully');
   } catch (err) {
     return error(res, err, err.statusCode || 500);
   }
+};
+
+const updateJournal = async (req, res) => {
+  try {
+    const journal = await JournalService.updateJournal(req.user.id, req.params.id, req.body);
+    return success(res, journal, 'Journal entry updated successfully');
+  } catch (err) {
+    return error(res, err, err.statusCode || 500);
+  }
+};
+
+const deleteJournal = async (req, res) => {
+  try {
+    const journal = await JournalService.deleteJournal(req.user.id, req.params.id);
+    return success(res, journal, 'Journal entry deleted successfully');
+  } catch (err) {
+    return error(res, err, err.statusCode || 500);
+  }
+};
+
+const toggleFavorite = async (req, res) => {
+  try {
+    const journal = await JournalService.toggleFavorite(req.user.id, req.params.id);
+    return success(res, journal, 'Journal favorite status toggled');
+  } catch (err) {
+    return error(res, err, err.statusCode || 500);
+  }
+};
+
+const togglePin = async (req, res) => {
+  try {
+    const journal = await JournalService.togglePin(req.user.id, req.params.id);
+    return success(res, journal, 'Journal pin status toggled');
+  } catch (err) {
+    return error(res, err, err.statusCode || 500);
+  }
+};
+
+module.exports = {
+  createJournal,
+  getJournals,
+  getJournalStats,
+  getJournalById,
+  updateJournal,
+  deleteJournal,
+  toggleFavorite,
+  togglePin,
 };
