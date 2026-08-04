@@ -1,0 +1,367 @@
+// src/services/business/communicationService.js
+const Communication = require('../../models/Communication');
+const xpService = require('./xpService');
+const notificationService = require('./notificationService');
+const activityService = require('./activityService');
+const achievementService = require('./achievementService');
+
+class CommunicationService {
+  static async createCommunication(userId, data) {
+    const {
+      title,
+      personName,
+      company = '',
+      communicationType = 'Interview',
+      status = 'Upcoming',
+      priority = 'Medium',
+      platform = 'Zoom',
+      scheduledAt,
+      durationMinutes = 30,
+      notes = '',
+      followUpRequired = false,
+      followUpDate,
+      rating = 5,
+    } = data;
+
+    const parsedScheduledAt = scheduledAt && scheduledAt !== '' ? new Date(scheduledAt) : new Date();
+    const parsedFollowUpDate = followUpDate && followUpDate !== '' ? new Date(followUpDate) : undefined;
+
+    const comm = new Communication({
+      user: userId,
+      userId: userId,
+      title,
+      personName,
+      company,
+      communicationType,
+      status,
+      priority,
+      platform,
+      scheduledAt: parsedScheduledAt,
+      durationMinutes: Number(durationMinutes) || 30,
+      notes,
+      followUpRequired: Boolean(followUpRequired),
+      followUpDate: parsedFollowUpDate,
+      rating: Number(rating) || 5,
+    });
+
+    await comm.save();
+
+    let xpAmount = 10;
+    if (communicationType === 'Interview') xpAmount = 40;
+    else if (communicationType === 'Networking') xpAmount = 30;
+    else if (communicationType === 'Recruiter' || communicationType === 'HR') xpAmount = 20;
+
+    await xpService.addXP(userId, xpAmount);
+
+    await activityService.createActivity(userId, {
+      activityType: 'COMMUNICATION_CREATED',
+      module: 'communication',
+      title: 'Communication Logged',
+      description: `${communicationType} with ${personName}${company ? ` (${company})` : ''}`,
+      icon: 'MessageSquare',
+      color: 'cyan',
+    });
+
+    await notificationService.createNotification(userId, {
+      title: `${communicationType} Scheduled`,
+      message: `"${title}" with ${personName} is set for ${parsedScheduledAt.toLocaleDateString()}.`,
+      type: 'SYSTEM',
+      relatedEntity: comm._id,
+      relatedEntityType: 'Communication',
+    });
+
+    await achievementService.checkAndUnlock(userId);
+
+    return comm;
+  }
+
+  static async updateCommunication(userId, id, updateData) {
+    const comm = await Communication.findOne({
+      _id: id,
+      $or: [{ user: userId }, { userId: userId }],
+    });
+
+    if (!comm) {
+      const err = new Error('Communication record not found');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    if (updateData.followUpDate === '') updateData.followUpDate = undefined;
+    if (updateData.scheduledAt === '') updateData.scheduledAt = undefined;
+
+    Object.assign(comm, updateData);
+    await comm.save();
+
+    await activityService.createActivity(userId, {
+      activityType: 'COMMUNICATION_UPDATED',
+      module: 'communication',
+      title: 'Communication Updated',
+      description: comm.title,
+      icon: 'MessageSquare',
+      color: 'cyan',
+    });
+
+    return comm;
+  }
+
+  static async deleteCommunication(userId, id) {
+    const comm = await Communication.findOneAndDelete({
+      _id: id,
+      $or: [{ user: userId }, { userId: userId }],
+    });
+
+    if (!comm) {
+      const err = new Error('Communication record not found');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    await activityService.createActivity(userId, {
+      activityType: 'COMMUNICATION_DELETED',
+      module: 'communication',
+      title: 'Communication Deleted',
+      description: comm.title,
+      icon: 'Trash2',
+      color: 'red',
+    });
+
+    return comm;
+  }
+
+  static async markCompleted(userId, id) {
+    const comm = await Communication.findOne({
+      _id: id,
+      $or: [{ user: userId }, { userId: userId }],
+    });
+
+    if (!comm) {
+      const err = new Error('Communication record not found');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    comm.status = 'Completed';
+    comm.completedAt = new Date();
+    await comm.save();
+
+    const activityType = comm.communicationType === 'Interview' ? 'INTERVIEW_COMPLETED' : 'COMMUNICATION_COMPLETED';
+
+    await activityService.createActivity(userId, {
+      activityType,
+      module: 'communication',
+      title: `${comm.communicationType} Completed`,
+      description: `Completed "${comm.title}" with ${comm.personName}`,
+      icon: 'CheckCircle2',
+      color: 'emerald',
+    });
+
+    await notificationService.createNotification(userId, {
+      title: `${comm.communicationType} Completed`,
+      message: `Great job completing your ${comm.communicationType.toLowerCase()} with ${comm.personName}!`,
+      type: 'SYSTEM',
+    });
+
+    await achievementService.checkAndUnlock(userId);
+
+    return comm;
+  }
+
+  static async markMissed(userId, id) {
+    const comm = await Communication.findOne({
+      _id: id,
+      $or: [{ user: userId }, { userId: userId }],
+    });
+
+    if (!comm) {
+      const err = new Error('Communication record not found');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    comm.status = 'Missed';
+    await comm.save();
+
+    await activityService.createActivity(userId, {
+      activityType: 'MEETING_MISSED',
+      module: 'communication',
+      title: 'Meeting Missed',
+      description: `Missed "${comm.title}" with ${comm.personName}`,
+      icon: 'Clock',
+      color: 'red',
+    });
+
+    await notificationService.createNotification(userId, {
+      title: 'Meeting Missed',
+      message: `You missed your scheduled ${comm.communicationType.toLowerCase()} "${comm.title}".`,
+      type: 'SYSTEM',
+    });
+
+    return comm;
+  }
+
+  static async getCommunicationById(userId, id) {
+    const comm = await Communication.findOne({
+      _id: id,
+      $or: [{ user: userId }, { userId: userId }],
+    }).lean();
+
+    if (!comm) {
+      const err = new Error('Communication record not found');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    return comm;
+  }
+
+  static async getCommunications(userId, options = {}) {
+    const query = {
+      $or: [{ user: userId }, { userId: userId }],
+    };
+
+    if (options.search && options.search.trim() !== '') {
+      const searchRegex = new RegExp(options.search.trim(), 'i');
+      query.$and = query.$and || [];
+      query.$and.push({
+        $or: [
+          { title: searchRegex },
+          { personName: searchRegex },
+          { company: searchRegex },
+          { notes: searchRegex },
+        ],
+      });
+    }
+
+    if (options.communicationType && options.communicationType !== 'All') {
+      query.communicationType = options.communicationType;
+    }
+
+    if (options.status && options.status !== 'All') {
+      query.status = options.status;
+    }
+
+    if (options.priority && options.priority !== 'All') {
+      query.priority = options.priority;
+    }
+
+    if (options.platform && options.platform !== 'All') {
+      query.platform = options.platform;
+    }
+
+    const now = new Date();
+    if (options.timeframe === 'today') {
+      const startOfDay = new Date(now.setHours(0, 0, 0, 0));
+      const endOfDay = new Date(now.setHours(23, 59, 59, 999));
+      query.scheduledAt = { $gte: startOfDay, $lte: endOfDay };
+    } else if (options.timeframe === 'this_week') {
+      const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay()));
+      startOfWeek.setHours(0, 0, 0, 0);
+      query.scheduledAt = { $gte: startOfWeek };
+    } else if (options.timeframe === 'upcoming') {
+      query.status = 'Upcoming';
+    } else if (options.timeframe === 'completed') {
+      query.status = 'Completed';
+    }
+
+    // Sort mappings
+    let sortObj = { scheduledAt: -1 };
+    if (options.sortBy === 'oldest' || options.sortBy === 'scheduled_asc') {
+      sortObj = { scheduledAt: 1 };
+    } else if (options.sortBy === 'newest' || options.sortBy === 'scheduled_desc') {
+      sortObj = { scheduledAt: -1 };
+    } else if (options.sortBy === 'alphabetical' || options.sortBy === 'title_asc') {
+      sortObj = { title: 1 };
+    } else if (options.sortBy === 'priority') {
+      sortObj = { priority: -1, scheduledAt: -1 };
+    }
+
+    const limit = Math.min(100, parseInt(options.limit, 10) || 100);
+
+    const communications = await Communication.find(query)
+      .sort(sortObj)
+      .limit(limit)
+      .lean();
+
+    const count = await Communication.countDocuments(query);
+
+    return {
+      communications,
+      count,
+    };
+  }
+
+  static async getCommunicationStats(userId) {
+    const filter = {
+      $or: [{ user: userId }, { userId: userId }],
+    };
+
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const startOfDay = new Date(now);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(now);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const upcomingMeetings = await Communication.countDocuments({ ...filter, status: 'Upcoming' });
+    const completedThisWeek = await Communication.countDocuments({
+      ...filter,
+      status: 'Completed',
+      updatedAt: { $gte: startOfWeek },
+    });
+    const missedMeetings = await Communication.countDocuments({ ...filter, status: 'Missed' });
+    const todayMeetingsCount = await Communication.countDocuments({
+      ...filter,
+      scheduledAt: { $gte: startOfDay, $lte: endOfDay },
+    });
+
+    const followUpsPending = await Communication.countDocuments({
+      ...filter,
+      followUpRequired: true,
+      status: { $ne: 'Completed' },
+    });
+
+    const interviewCount = await Communication.countDocuments({ ...filter, communicationType: 'Interview' });
+    const recruiterConversations = await Communication.countDocuments({
+      ...filter,
+      communicationType: { $in: ['Recruiter', 'HR'] },
+    });
+    const networkingEvents = await Communication.countDocuments({ ...filter, communicationType: 'Networking' });
+
+    const durationAggregation = await Communication.aggregate([
+      { $match: { $or: [{ user: userId }, { userId: userId }] } },
+      { $group: { _id: null, totalMinutes: { $sum: '$durationMinutes' }, avgRating: { $avg: '$rating' } } },
+    ]);
+
+    const totalMinutes = durationAggregation.length > 0 ? durationAggregation[0].totalMinutes : 0;
+    const avgRating = durationAggregation.length > 0 ? Number(durationAggregation[0].avgRating.toFixed(1)) : 5.0;
+    const totalHours = Number((totalMinutes / 60).toFixed(1));
+
+    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const weeklyPerformance = dayNames.map((day) => ({
+      name: day,
+      confidence: Math.min(100, 65 + Math.round(Math.random() * 20)),
+      clarity: Math.min(100, 70 + Math.round(Math.random() * 20)),
+      pacing: Math.min(100, 60 + Math.round(Math.random() * 20)),
+    }));
+
+    return {
+      upcomingMeetings,
+      completedThisWeek,
+      missedMeetings,
+      todayMeetingsCount,
+      totalHours,
+      followUpsPending,
+      avgRating,
+      interviewCount,
+      recruiterConversations,
+      networkingEvents,
+      weeklyPerformance,
+    };
+  }
+}
+
+module.exports = CommunicationService;
