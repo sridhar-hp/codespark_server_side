@@ -7,6 +7,8 @@ const achievementService = require('./achievementService');
 
 class CommunicationService {
   static async createCommunication(userId, data) {
+    console.log('[STEP 4] CommunicationService.createCommunication entered for userId:', userId);
+
     const {
       title,
       personName,
@@ -44,33 +46,68 @@ class CommunicationService {
       rating: Number(rating) || 5,
     });
 
+    console.log('[STEP 5] Document prepared before save():', {
+      title: comm.title,
+      personName: comm.personName,
+      communicationType: comm.communicationType,
+      status: comm.status,
+      user: comm.user,
+    });
+
     await comm.save();
+    console.log('[STEP 6] Mongo save() succeeded! Document ID:', comm._id);
 
-    let xpAmount = 10;
-    if (communicationType === 'Interview') xpAmount = 40;
-    else if (communicationType === 'Networking') xpAmount = 30;
-    else if (communicationType === 'Recruiter' || communicationType === 'HR') xpAmount = 20;
+    // STEP 7: Activity Creation
+    try {
+      console.log('[STEP 7] Activity creation starting...');
+      await activityService.createActivity(userId, {
+        activityType: 'COMMUNICATION_CREATED',
+        module: 'communication',
+        title: 'Communication Logged',
+        description: `${communicationType} with ${personName}${company ? ` (${company})` : ''}`,
+        icon: 'MessageSquare',
+        color: 'cyan',
+      });
+      console.log('[STEP 7] Activity creation succeeded.');
+    } catch (actErr) {
+      console.error('[STEP 7 WARNING] Activity creation error:', actErr.message);
+    }
 
-    await xpService.addXP(userId, xpAmount);
+    // STEP 8: Notification Creation
+    try {
+      console.log('[STEP 8] Notification creation starting...');
+      await notificationService.createNotification(userId, {
+        title: `${communicationType} Scheduled`,
+        message: `"${title}" with ${personName} is set for ${parsedScheduledAt.toLocaleDateString()}.`,
+        type: 'SYSTEM',
+        relatedEntity: comm._id,
+        relatedEntityType: 'Communication',
+      });
+      console.log('[STEP 8] Notification creation succeeded.');
+    } catch (notifErr) {
+      console.error('[STEP 8 WARNING] Notification creation error:', notifErr.message);
+    }
 
-    await activityService.createActivity(userId, {
-      activityType: 'COMMUNICATION_CREATED',
-      module: 'communication',
-      title: 'Communication Logged',
-      description: `${communicationType} with ${personName}${company ? ` (${company})` : ''}`,
-      icon: 'MessageSquare',
-      color: 'cyan',
-    });
+    // STEP 9: XP Update
+    try {
+      console.log('[STEP 9] XP update starting...');
+      let xpAmount = 10;
+      if (communicationType === 'Interview') xpAmount = 40;
+      else if (communicationType === 'Networking') xpAmount = 30;
+      else if (communicationType === 'Recruiter' || communicationType === 'HR') xpAmount = 20;
 
-    await notificationService.createNotification(userId, {
-      title: `${communicationType} Scheduled`,
-      message: `"${title}" with ${personName} is set for ${parsedScheduledAt.toLocaleDateString()}.`,
-      type: 'SYSTEM',
-      relatedEntity: comm._id,
-      relatedEntityType: 'Communication',
-    });
+      await xpService.addXP(userId, xpAmount);
+      console.log('[STEP 9] XP update succeeded (+' + xpAmount + ' XP).');
+    } catch (xpErr) {
+      console.error('[STEP 9 WARNING] XP update error:', xpErr.message);
+    }
 
-    await achievementService.checkAndUnlock(userId);
+    // Achievements Check
+    try {
+      await achievementService.checkAndUnlock(userId);
+    } catch (achErr) {
+      console.error('[ACHIEVEMENTS WARNING] Check failed:', achErr.message);
+    }
 
     return comm;
   }
@@ -93,14 +130,18 @@ class CommunicationService {
     Object.assign(comm, updateData);
     await comm.save();
 
-    await activityService.createActivity(userId, {
-      activityType: 'COMMUNICATION_UPDATED',
-      module: 'communication',
-      title: 'Communication Updated',
-      description: comm.title,
-      icon: 'MessageSquare',
-      color: 'cyan',
-    });
+    try {
+      await activityService.createActivity(userId, {
+        activityType: 'COMMUNICATION_UPDATED',
+        module: 'communication',
+        title: 'Communication Updated',
+        description: comm.title,
+        icon: 'MessageSquare',
+        color: 'cyan',
+      });
+    } catch (err) {
+      console.error('[ACTIVITY WARNING]', err.message);
+    }
 
     return comm;
   }
@@ -117,14 +158,18 @@ class CommunicationService {
       throw err;
     }
 
-    await activityService.createActivity(userId, {
-      activityType: 'COMMUNICATION_DELETED',
-      module: 'communication',
-      title: 'Communication Deleted',
-      description: comm.title,
-      icon: 'Trash2',
-      color: 'red',
-    });
+    try {
+      await activityService.createActivity(userId, {
+        activityType: 'COMMUNICATION_DELETED',
+        module: 'communication',
+        title: 'Communication Deleted',
+        description: comm.title,
+        icon: 'Trash2',
+        color: 'red',
+      });
+    } catch (err) {
+      console.error('[ACTIVITY WARNING]', err.message);
+    }
 
     return comm;
   }
@@ -147,22 +192,34 @@ class CommunicationService {
 
     const activityType = comm.communicationType === 'Interview' ? 'INTERVIEW_COMPLETED' : 'COMMUNICATION_COMPLETED';
 
-    await activityService.createActivity(userId, {
-      activityType,
-      module: 'communication',
-      title: `${comm.communicationType} Completed`,
-      description: `Completed "${comm.title}" with ${comm.personName}`,
-      icon: 'CheckCircle2',
-      color: 'emerald',
-    });
+    try {
+      await activityService.createActivity(userId, {
+        activityType,
+        module: 'communication',
+        title: `${comm.communicationType} Completed`,
+        description: `Completed "${comm.title}" with ${comm.personName}`,
+        icon: 'CheckCircle2',
+        color: 'emerald',
+      });
+    } catch (err) {
+      console.error('[ACTIVITY WARNING]', err.message);
+    }
 
-    await notificationService.createNotification(userId, {
-      title: `${comm.communicationType} Completed`,
-      message: `Great job completing your ${comm.communicationType.toLowerCase()} with ${comm.personName}!`,
-      type: 'SYSTEM',
-    });
+    try {
+      await notificationService.createNotification(userId, {
+        title: `${comm.communicationType} Completed`,
+        message: `Great job completing your ${comm.communicationType.toLowerCase()} with ${comm.personName}!`,
+        type: 'SYSTEM',
+      });
+    } catch (err) {
+      console.error('[NOTIF WARNING]', err.message);
+    }
 
-    await achievementService.checkAndUnlock(userId);
+    try {
+      await achievementService.checkAndUnlock(userId);
+    } catch (err) {
+      console.error('[ACHIEVEMENT WARNING]', err.message);
+    }
 
     return comm;
   }
@@ -182,20 +239,28 @@ class CommunicationService {
     comm.status = 'Missed';
     await comm.save();
 
-    await activityService.createActivity(userId, {
-      activityType: 'MEETING_MISSED',
-      module: 'communication',
-      title: 'Meeting Missed',
-      description: `Missed "${comm.title}" with ${comm.personName}`,
-      icon: 'Clock',
-      color: 'red',
-    });
+    try {
+      await activityService.createActivity(userId, {
+        activityType: 'MEETING_MISSED',
+        module: 'communication',
+        title: 'Meeting Missed',
+        description: `Missed "${comm.title}" with ${comm.personName}`,
+        icon: 'Clock',
+        color: 'red',
+      });
+    } catch (err) {
+      console.error('[ACTIVITY WARNING]', err.message);
+    }
 
-    await notificationService.createNotification(userId, {
-      title: 'Meeting Missed',
-      message: `You missed your scheduled ${comm.communicationType.toLowerCase()} "${comm.title}".`,
-      type: 'SYSTEM',
-    });
+    try {
+      await notificationService.createNotification(userId, {
+        title: 'Meeting Missed',
+        message: `You missed your scheduled ${comm.communicationType.toLowerCase()} "${comm.title}".`,
+        type: 'SYSTEM',
+      });
+    } catch (err) {
+      console.error('[NOTIF WARNING]', err.message);
+    }
 
     return comm;
   }
@@ -258,13 +323,14 @@ class CommunicationService {
       const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay()));
       startOfWeek.setHours(0, 0, 0, 0);
       query.scheduledAt = { $gte: startOfWeek };
-    } else if (options.timeframe === 'upcoming') {
+    } else if (options.timeframe === 'upcoming' || options.sortBy === 'upcoming') {
       query.status = 'Upcoming';
-    } else if (options.timeframe === 'completed') {
+    } else if (options.timeframe === 'completed' || options.sortBy === 'completed') {
       query.status = 'Completed';
+    } else if (options.timeframe === 'missed' || options.sortBy === 'missed') {
+      query.status = 'Missed';
     }
 
-    // Sort mappings
     let sortObj = { scheduledAt: -1 };
     if (options.sortBy === 'oldest' || options.sortBy === 'scheduled_asc') {
       sortObj = { scheduledAt: 1 };
