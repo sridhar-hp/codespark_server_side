@@ -116,14 +116,56 @@ communicationSchema.pre('save', function () {
   }
 });
 
+// Indexes for activity tracking
 communicationSchema.index({ user: 1, scheduledAt: -1 });
 communicationSchema.index({ userId: 1, scheduledAt: -1 });
 communicationSchema.index({ user: 1, status: 1 });
 communicationSchema.index({ user: 1, communicationType: 1 });
+communicationSchema.index({ user: 1, priority: 1 });
 communicationSchema.index({ user: 1, followUpRequired: 1, followUpDate: 1 });
 
-module.exports = mongoose.model('Communication', communicationSchema);
+const Communication = mongoose.model('Communication', communicationSchema);
+
+/**
+ * Migration helper to drop obsolete unique index `user_1_channel_1_messageId_1`
+ * from MongoDB `communications` collection if it exists.
+ */
+const dropLegacyIndexes = async () => {
+  try {
+    const db = mongoose.connection.db;
+    if (!db) return;
+
+    const collection = db.collection('communications');
+    if (!collection) return;
+
+    const indexes = await collection.indexes();
+    for (const idx of indexes) {
+      if (
+        idx.name === 'user_1_channel_1_messageId_1' ||
+        (idx.key && (idx.key.channel || idx.key.messageId))
+      ) {
+        console.log(`[Migration] Dropping obsolete unique index: ${idx.name}`);
+        await collection.dropIndex(idx.name);
+      }
+    }
+  } catch (err) {
+    if (err.code !== 26 && err.codeName !== 'NamespaceNotFound') {
+      console.warn('[Migration] Legacy index check notice:', err.message);
+    }
+  }
+};
+
+mongoose.connection.on('connected', () => {
+  dropLegacyIndexes();
+});
+
+if (mongoose.connection.readyState === 1) {
+  dropLegacyIndexes();
+}
+
+module.exports = Communication;
 module.exports.TYPE_ENUM = TYPE_ENUM;
 module.exports.STATUS_ENUM = STATUS_ENUM;
 module.exports.PRIORITY_ENUM = PRIORITY_ENUM;
 module.exports.PLATFORM_ENUM = PLATFORM_ENUM;
+module.exports.dropLegacyIndexes = dropLegacyIndexes;
