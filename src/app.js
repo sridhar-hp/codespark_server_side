@@ -20,14 +20,33 @@ const leetcodeRoutes = require('./routes/leetcodeRoutes');
 const learningRoutes = require('./routes/learningRoutes');
 const studySessionRoutes = require('./routes/studySessionRoutes');
 const communicationRoutes = require('./routes/communicationRoutes');
+const omegaRoutes = require('./routes/omegaRoutes');
 const linkedinRoutes = require('./routes/linkedinRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
 const passwordResetRoutes = require('./routes/passwordResetRoutes');
 
 const app = express();
 
-// Global middleware
-app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
+// Global middleware - allow CodeSpark client and Chrome Extension requests
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (
+        !origin ||
+        origin.startsWith('chrome-extension://') ||
+        origin === process.env.CLIENT_URL ||
+        origin === 'http://localhost:5173' ||
+        origin === 'http://localhost:3000'
+      ) {
+        callback(null, true);
+      } else {
+        callback(null, true);
+      }
+    },
+    credentials: true,
+  })
+);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
@@ -47,6 +66,7 @@ app.use('/api/v1/leetcode', leetcodeRoutes);
 app.use('/api/v1/learning', learningRoutes);
 app.use('/api/v1/study-session', studySessionRoutes);
 app.use('/api/v1/communication', communicationRoutes);
+app.use('/api/v1/omega', omegaRoutes);
 app.use('/api/v1/linkedin', linkedinRoutes);
 app.use('/api/v1/analytics', analyticsRoutes);
 app.use('/api/v1/password-reset', passwordResetRoutes);
