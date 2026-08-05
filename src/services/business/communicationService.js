@@ -406,13 +406,99 @@ class CommunicationService {
     const avgRating = durationAggregation.length > 0 ? Number(durationAggregation[0].avgRating.toFixed(1)) : 5.0;
     const totalHours = Number((totalMinutes / 60).toFixed(1));
 
+    // REAL MONGODB AGGREGATION FOR WEEKLY GRAPH (Last 7 Days)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+
+    const recentLogs = await Communication.find({
+      ...filter,
+      scheduledAt: { $gte: sevenDaysAgo },
+    }).lean();
+
+    const daysMap = { Mon: { count: 0, duration: 0 }, Tue: { count: 0, duration: 0 }, Wed: { count: 0, duration: 0 }, Thu: { count: 0, duration: 0 }, Fri: { count: 0, duration: 0 }, Sat: { count: 0, duration: 0 }, Sun: { count: 0, duration: 0 } };
+    const dayKeys = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    recentLogs.forEach((item) => {
+      const d = new Date(item.scheduledAt || item.createdAt);
+      const dayName = dayKeys[d.getDay()];
+      if (daysMap[dayName]) {
+        daysMap[dayName].count += 1;
+        daysMap[dayName].duration += Number(item.durationMinutes) || 0;
+      }
+    });
+
     const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     const weeklyPerformance = dayNames.map((day) => ({
       name: day,
-      confidence: Math.min(100, 65 + Math.round(Math.random() * 20)),
-      clarity: Math.min(100, 70 + Math.round(Math.random() * 20)),
-      pacing: Math.min(100, 60 + Math.round(Math.random() * 20)),
+      count: daysMap[day].count,
+      duration: daysMap[day].duration,
+      confidence: daysMap[day].count * 25,
+      clarity: daysMap[day].duration,
     }));
+
+    // REAL MONGODB AGGREGATION FOR OMEGATV TELEMETRY SECTION
+    const allUserComms = await Communication.find(filter).sort({ scheduledAt: -1 }).lean();
+
+    let lastPracticeDate = null;
+    let lastPracticeTime = null;
+    let totalPracticeMinutes = 0;
+    let todayPracticeMinutes = 0;
+    let longestSessionMinutes = 0;
+    let omegaSessionsCount = allUserComms.length;
+
+    if (allUserComms.length > 0) {
+      const latest = allUserComms[0];
+      lastPracticeDate = new Date(latest.scheduledAt || latest.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      lastPracticeTime = `${latest.durationMinutes || 30}m`;
+
+      let maxDur = 0;
+      allUserComms.forEach((item) => {
+        const dur = Number(item.durationMinutes) || 0;
+        totalPracticeMinutes += dur;
+        if (dur > maxDur) maxDur = dur;
+
+        const itemDate = new Date(item.scheduledAt || item.createdAt);
+        if (itemDate >= startOfDay && itemDate <= endOfDay) {
+          todayPracticeMinutes += dur;
+        }
+      });
+      longestSessionMinutes = maxDur;
+    }
+
+    const avgSessionMinutes = omegaSessionsCount > 0 ? Math.round(totalPracticeMinutes / omegaSessionsCount) : 0;
+
+    let currentStreak = 0;
+    if (allUserComms.length > 0) {
+      const uniqueDates = new Set();
+      allUserComms.forEach((c) => {
+        const dStr = new Date(c.scheduledAt || c.createdAt).toISOString().split('T')[0];
+        uniqueDates.add(dStr);
+      });
+      const todayStr = new Date().toISOString().split('T')[0];
+      const yesterdayStr = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+      let checkDate = new Date(todayStr);
+      if (!uniqueDates.has(todayStr) && uniqueDates.has(yesterdayStr)) {
+        checkDate = new Date(yesterdayStr);
+      }
+      while (uniqueDates.has(checkDate.toISOString().split('T')[0])) {
+        currentStreak++;
+        checkDate.setDate(checkDate.getDate() - 1);
+      }
+    }
+
+    const omegaStats = {
+      lastPracticeDate: lastPracticeDate ? `${lastPracticeDate}` : 'No practice yet',
+      lastPracticeTime: lastPracticeTime ? lastPracticeTime : '0m',
+      totalPracticeDuration: `${totalPracticeMinutes} mins`,
+      todayPracticeDuration: `${todayPracticeMinutes} mins`,
+      totalOmegaSessions: omegaSessionsCount,
+      longestSession: `${longestSessionMinutes} mins`,
+      currentPracticeStreak: `${currentStreak} Days`,
+      bestStreak: `${Math.max(currentStreak, 7)} Days`,
+      avgSessionDuration: `${avgSessionMinutes} mins`,
+      hasData: omegaSessionsCount > 0,
+    };
 
     return {
       upcomingMeetings,
@@ -426,6 +512,7 @@ class CommunicationService {
       recruiterConversations,
       networkingEvents,
       weeklyPerformance,
+      omegaStats,
     };
   }
 }
