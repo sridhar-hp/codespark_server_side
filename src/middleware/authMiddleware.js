@@ -12,11 +12,15 @@ const protect = async (req, res, next) => {
   let token;
   const authHeader = req.headers.authorization;
 
+  console.log("AUTH HEADER:", authHeader ? authHeader.substring(0, 35) + "..." : "MISSING");
+
   if (authHeader && authHeader.startsWith("Bearer")) {
     token = authHeader.split(" ")[1];
   } else if (req.cookies?.accessToken) {
     token = req.cookies.accessToken;
   }
+
+  console.log("TOKEN:", token ? token.substring(0, 25) + "..." : "NONE");
 
   if (!token) {
     return error(res, new Error("Not authorized, token missing"), 401);
@@ -24,6 +28,7 @@ const protect = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    console.log("USER:", JSON.stringify({ id: decoded.id, role: decoded.role }));
 
     // Check if the token still exists in the database
     const storedToken = await AuthToken.findOne({
@@ -32,6 +37,7 @@ const protect = async (req, res, next) => {
     });
 
     if (!storedToken) {
+      console.warn("Auth Middleware Warning: Token revoked or missing from AuthToken store");
       return error(
         res,
         new Error("Not authorized, token has been revoked"),
@@ -46,8 +52,8 @@ const protect = async (req, res, next) => {
 
     next();
   } catch (err) {
-    console.error("Auth Middleware Error:", err);
-    return error(res, new Error("Not authorized, token invalid"), 401);
+    console.error("Auth Middleware Error:", err.name, "-", err.message);
+    return error(res, new Error(`Not authorized: ${err.message}`), 401);
   }
 };
 
