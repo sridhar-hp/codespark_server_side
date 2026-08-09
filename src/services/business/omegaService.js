@@ -9,27 +9,37 @@ const achievementService = require('./achievementService');
 
 class OmegaService {
   static async startSession(userId, data) {
+    console.log('[OMEGA DEBUG] Service executed: startSession for User ID:', userId);
+
     const { sessionId, startTime, platform = 'OmegaTV' } = data;
     const sessionDate = new Date(startTime || Date.now()).toISOString().split('T')[0];
 
-    const session = await OmegaSession.findOneAndUpdate(
-      { sessionId },
-      {
-        user: userId,
-        userId: userId,
-        sessionId,
-        startTime: startTime ? new Date(startTime) : new Date(),
-        platform,
-        status: 'Active',
-        date: sessionDate,
-      },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    );
+    try {
+      const session = await OmegaSession.findOneAndUpdate(
+        { sessionId },
+        {
+          user: userId,
+          userId: userId,
+          sessionId,
+          startTime: startTime ? new Date(startTime) : new Date(),
+          platform,
+          status: 'Active',
+          date: sessionDate,
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
 
-    return session;
+      console.log('[OMEGA DEBUG] Mongo save success (startSession):', session._id, 'SessionId:', session.sessionId);
+      return session;
+    } catch (mongoErr) {
+      console.error('[OMEGA DEBUG] Mongo save failed (startSession):', mongoErr.message, mongoErr.stack);
+      throw mongoErr;
+    }
   }
 
   static async endSession(userId, data) {
+    console.log('[OMEGA DEBUG] Service executed: endSession for User ID:', userId);
+
     const { sessionId, endTime, duration, conversationCount = 0, talkTime = 0, idleTime = 0 } = data;
 
     let session = await OmegaSession.findOne({ sessionId, $or: [{ user: userId }, { userId: userId }] });
@@ -64,7 +74,13 @@ class OmegaService {
       session.idleTime = Number(idleTime) || session.idleTime;
     }
 
-    await session.save();
+    try {
+      await session.save();
+      console.log('[OMEGA DEBUG] Mongo save success (endSession):', session._id, 'Duration:', durMins, 'mins');
+    } catch (mongoErr) {
+      console.error('[OMEGA DEBUG] Mongo save failed (endSession):', mongoErr.message, mongoErr.stack);
+      throw mongoErr;
+    }
 
     // 1. XP Integration: 1 XP per minute + 10 bonus XP per conversation
     const xpEarned = Math.max(10, durMins * 1 + (session.conversationCount * 10));
@@ -143,6 +159,7 @@ class OmegaService {
   }
 
   static async addConversation(userId, data) {
+    console.log('[OMEGA DEBUG] Service executed: addConversation for User ID:', userId);
     const { sessionId, talkTime = 30 } = data;
     const session = await OmegaSession.findOne({ sessionId, $or: [{ user: userId }, { userId: userId }] });
 
@@ -150,6 +167,7 @@ class OmegaService {
       session.conversationCount = (session.conversationCount || 0) + 1;
       session.talkTime = (session.talkTime || 0) + Number(talkTime);
       await session.save();
+      console.log('[OMEGA DEBUG] Mongo save success (addConversation):', session._id);
     }
     return session;
   }
@@ -185,7 +203,6 @@ class OmegaService {
     const avgSessionSeconds = totalSessions > 0 ? Math.round(totalDurationSeconds / totalSessions) : 0;
     const lastSession = sessions.length > 0 ? sessions[0] : null;
 
-    // Streak calculation
     let currentStreak = 0;
     if (sessions.length > 0) {
       const uniqueDates = new Set(sessions.map((s) => s.date));
