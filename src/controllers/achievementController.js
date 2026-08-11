@@ -13,7 +13,7 @@ exports.list = async (req, res) => {
 
 exports.check = async (req, res) => {
   try {
-    const data = await AchievementService.getAchievements(req.user.id);
+    const data = await AchievementService.checkAndUnlock(req.user.id);
     return success(res, data, 'Achievements checked and updated');
   } catch (err) {
     return error(res, err, err.statusCode || 500);
