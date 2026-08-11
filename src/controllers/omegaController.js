@@ -9,7 +9,7 @@ const getStatusCode = (err) => {
 };
 
 const startSession = async (req, res) => {
-  console.log('[OMEGA DEBUG] Controller executed: startSession for User ID:', req.user?.id);
+  console.log('[TEMPORARY LOG] Controller entered: startSession for User ID:', req.user?.id);
   try {
     const session = await OmegaService.startSession(req.user.id, req.body);
     console.log('[OMEGA DEBUG] Controller startSession success:', session._id);
@@ -21,7 +21,7 @@ const startSession = async (req, res) => {
 };
 
 const endSession = async (req, res) => {
-  console.log('[OMEGA DEBUG] Controller executed: endSession for User ID:', req.user?.id);
+  console.log('[TEMPORARY LOG] Controller entered: endSession for User ID:', req.user?.id);
   try {
     const session = await OmegaService.endSession(req.user.id, req.body);
     console.log('[OMEGA DEBUG] Controller endSession success:', session._id);
@@ -33,7 +33,7 @@ const endSession = async (req, res) => {
 };
 
 const addConversation = async (req, res) => {
-  console.log('[OMEGA DEBUG] Controller executed: addConversation for User ID:', req.user?.id);
+  console.log('[TEMPORARY LOG] Controller entered: addConversation for User ID:', req.user?.id);
   try {
     const session = await OmegaService.addConversation(req.user.id, req.body);
     return success(res, session, 'Conversation added to session');

@@ -9,12 +9,13 @@ const achievementService = require('./achievementService');
 
 class OmegaService {
   static async startSession(userId, data) {
-    console.log('[OMEGA DEBUG] Service executed: startSession for User ID:', userId);
+    console.log('[TEMPORARY LOG] Service entered: startSession for User ID:', userId);
 
     const { sessionId, startTime, platform = 'OmegaTV' } = data;
     const sessionDate = new Date(startTime || Date.now()).toISOString().split('T')[0];
 
     try {
+      console.log('[TEMPORARY LOG] Before MongoDB save (startSession)');
       const session = await OmegaSession.findOneAndUpdate(
         { sessionId },
         {
@@ -29,7 +30,7 @@ class OmegaService {
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
 
-      console.log('[OMEGA DEBUG] Mongo save success (startSession):', session._id, 'SessionId:', session.sessionId);
+      console.log('[TEMPORARY LOG] After MongoDB save (startSession):', session._id, 'SessionId:', session.sessionId);
       return session;
     } catch (mongoErr) {
       console.error('[OMEGA DEBUG] Mongo save failed (startSession):', mongoErr.message, mongoErr.stack);
@@ -38,7 +39,7 @@ class OmegaService {
   }
 
   static async endSession(userId, data) {
-    console.log('[OMEGA DEBUG] Service executed: endSession for User ID:', userId);
+    console.log('[TEMPORARY LOG] Service entered: endSession for User ID:', userId);
 
     const { sessionId, endTime, duration, conversationCount = 0, talkTime = 0, idleTime = 0 } = data;
 
@@ -75,8 +76,9 @@ class OmegaService {
     }
 
     try {
+      console.log('[TEMPORARY LOG] Before MongoDB save (endSession)');
       await session.save();
-      console.log('[OMEGA DEBUG] Mongo save success (endSession):', session._id, 'Duration:', durMins, 'mins');
+      console.log('[TEMPORARY LOG] After MongoDB save (endSession):', session._id, 'Duration:', durMins, 'mins');
     } catch (mongoErr) {
       console.error('[OMEGA DEBUG] Mongo save failed (endSession):', mongoErr.message, mongoErr.stack);
       throw mongoErr;
@@ -159,15 +161,16 @@ class OmegaService {
   }
 
   static async addConversation(userId, data) {
-    console.log('[OMEGA DEBUG] Service executed: addConversation for User ID:', userId);
+    console.log('[TEMPORARY LOG] Service entered: addConversation for User ID:', userId);
     const { sessionId, talkTime = 30 } = data;
     const session = await OmegaSession.findOne({ sessionId, $or: [{ user: userId }, { userId: userId }] });
 
     if (session) {
       session.conversationCount = (session.conversationCount || 0) + 1;
       session.talkTime = (session.talkTime || 0) + Number(talkTime);
+      console.log('[TEMPORARY LOG] Before MongoDB save (addConversation)');
       await session.save();
-      console.log('[OMEGA DEBUG] Mongo save success (addConversation):', session._id);
+      console.log('[TEMPORARY LOG] After MongoDB save (addConversation):', session._id);
     }
     return session;
   }

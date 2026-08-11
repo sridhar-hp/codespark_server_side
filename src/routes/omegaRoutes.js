@@ -6,9 +6,9 @@ const { protect } = require('../middleware/authMiddleware');
 const validate = require('../middleware/validationMiddleware');
 const omegaValidate = require('../validations/omegaValidation');
 
-// Debug middleware to log all incoming Omega route requests
+// Temporary console log: Route entered
 router.use((req, res, next) => {
-  console.log(`[OMEGA DEBUG] Route hit: ${req.method} ${req.originalUrl}`);
+  console.log(`[TEMPORARY LOG] Route entered: ${req.method} ${req.originalUrl}`);
   console.log('[OMEGA DEBUG] Authorization Header:', req.headers.authorization ? 'PRESENT' : 'MISSING');
   console.log('[OMEGA DEBUG] Request Payload:', JSON.stringify(req.body));
   next();
