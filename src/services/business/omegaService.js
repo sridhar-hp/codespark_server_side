@@ -6,6 +6,7 @@ const notificationService = require('./notificationService');
 const activityService = require('./activityService');
 const dailyProgressService = require('./dailyProgressService');
 const achievementService = require('./achievementService');
+const analyticsService = require('./analyticsService');
 
 class OmegaService {
   static async startSession(userId, data) {
@@ -79,6 +80,7 @@ class OmegaService {
       console.log('[TEMPORARY LOG] Before MongoDB save (endSession)');
       await session.save();
       console.log('[TEMPORARY LOG] After MongoDB save (endSession):', session._id, 'Duration:', durMins, 'mins');
+      console.log('[HEATMAP DEBUG] Session completed:', session.sessionId);
     } catch (mongoErr) {
       console.error('[OMEGA DEBUG] Mongo save failed (endSession):', mongoErr.message, mongoErr.stack);
       throw mongoErr;
@@ -141,16 +143,25 @@ class OmegaService {
 
     // 5. Daily Progress & Heatmap Integration
     try {
-      await dailyProgressService.record(userId, {
+      const dp = await dailyProgressService.record(userId, {
         date: sessionDate,
         tasksCompleted: 1,
         xpEarned,
       });
+      console.log('[HEATMAP DEBUG] DailyProgress updated:', dp._id || dp.date);
     } catch (err) {
       console.error('[Omega Heatmap Error]', err.message);
     }
 
-    // 6. Achievement Unlocks
+    // 6. Analytics Overview Update
+    try {
+      const analytics = await analyticsService.getOverview(userId);
+      console.log('[HEATMAP DEBUG] Analytics updated:', analytics ? 'SUCCESS' : 'FAILED');
+    } catch (err) {
+      console.error('[Omega Analytics Error]', err.message);
+    }
+
+    // 7. Achievement Unlocks
     try {
       await achievementService.checkAndUnlock(userId);
     } catch (err) {
