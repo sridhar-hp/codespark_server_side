@@ -15,6 +15,8 @@ const SYSTEM_ACHIEVEMENTS = [
 
 class AchievementService {
   static async checkAndUnlock(userId) {
+    console.log('[ACHIEVEMENT DEBUG] checkAndUnlock called for User ID:', userId);
+
     let stats = await UserStats.findOne({ user: userId });
     const currentXP = stats?.totalXP || 0;
     const currentLevel = stats?.level || 1;
@@ -40,14 +42,16 @@ class AchievementService {
             category: sysAch.category,
             icon: sysAch.icon,
           },
-          { upsert: true, new: true, setDefaultsOnInsert: true }
+          { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
         );
 
-        await UserAchievement.findOneAndUpdate(
+        const ua = await UserAchievement.findOneAndUpdate(
           { user: userId, achievement: achDoc._id },
           { user: userId, achievement: achDoc._id },
-          { upsert: true, new: true, setDefaultsOnInsert: true }
+          { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
         );
+
+        console.log('[ACHIEVEMENT DEBUG] UserAchievement checked/created:', ua._id, 'for key:', sysAch.key);
       }
     }
 
@@ -55,6 +59,8 @@ class AchievementService {
   }
 
   static async getAchievements(userId) {
+    console.log('[ACHIEVEMENT DEBUG] getAchievements called for User ID:', userId);
+
     const unlockedDocs = await Achievement.find({ user: userId }).lean();
     const unlockedSet = new Set(unlockedDocs.map((a) => a.key));
     const unlockedDocMap = {};
@@ -117,6 +123,8 @@ class AchievementService {
 
     const latestUnlocked = unlockedItems.length > 0 ? unlockedItems[unlockedItems.length - 1] : null;
     const nextGoal = lockedItems.length > 0 ? lockedItems[0] : null;
+
+    console.log('[ACHIEVEMENT DEBUG] Unlocked count:', unlockedCount, 'Total:', totalCount, 'Rate:', completionRate + '%');
 
     return {
       unlockedCount,
