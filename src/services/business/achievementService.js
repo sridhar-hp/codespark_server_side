@@ -5,17 +5,17 @@ const UserStats = require('../../models/UserStats');
 const Task = require('../../models/Task');
 
 const SYSTEM_ACHIEVEMENTS = [
-  { key: 'first_task', title: 'First Step', description: 'Complete your first task in CodeSpark', category: 'task', icon: 'CheckSquare' },
-  { key: 'task_master_10', title: 'Task Master', description: 'Complete 10 total tasks', category: 'task', icon: 'CheckCircle2' },
-  { key: 'xp_novice', title: 'Powering Up', description: 'Earn 100 total XP', category: 'xp', icon: 'Zap' },
-  { key: 'xp_pro', title: 'High Performer', description: 'Earn 500 total XP', category: 'xp', icon: 'Sparkles' },
-  { key: 'level_up', title: 'Rising Star', description: 'Reach Level 2', category: 'level', icon: 'Crown' },
-  { key: 'level_master', title: 'CodeSpark Legend', description: 'Reach Level 5', category: 'level', icon: 'Trophy' },
+  { key: 'first_task', aliases: ['first_step'], title: 'First Step', description: 'Complete your first task in CodeSpark', category: 'task', icon: 'CheckSquare' },
+  { key: 'task_master_10', aliases: [], title: 'Task Master', description: 'Complete 10 total tasks', category: 'task', icon: 'CheckCircle2' },
+  { key: 'xp_novice', aliases: ['xp_rookie'], title: 'Powering Up', description: 'Earn 100 total XP', category: 'xp', icon: 'Zap' },
+  { key: 'xp_pro', aliases: ['xp_explorer', 'xp_warrior'], title: 'High Performer', description: 'Earn 500 total XP', category: 'xp', icon: 'Sparkles' },
+  { key: 'level_up', aliases: [], title: 'Rising Star', description: 'Reach Level 2', category: 'level', icon: 'Crown' },
+  { key: 'level_master', aliases: ['level_5', 'level_10', 'level_25', 'xp_master'], title: 'CodeSpark Legend', description: 'Reach Level 5', category: 'level', icon: 'Trophy' },
 ];
 
 class AchievementService {
   static async checkAndUnlock(userId) {
-    console.log('[ACHIEVEMENT DEBUG] checkAndUnlock called for User ID:', userId);
+    console.log('[ACH DEBUG] checkAndUnlock called for User ID:', userId);
 
     let stats = await UserStats.findOne({ user: userId });
     const currentXP = stats?.totalXP || 0;
@@ -51,7 +51,7 @@ class AchievementService {
           { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
         );
 
-        console.log('[ACHIEVEMENT DEBUG] UserAchievement checked/created:', ua._id, 'for key:', sysAch.key);
+        console.log('[ACH DEBUG] UserAchievement check/update:', ua._id, 'key:', sysAch.key);
       }
     }
 
@@ -59,12 +59,16 @@ class AchievementService {
   }
 
   static async getAchievements(userId) {
-    console.log('[ACHIEVEMENT DEBUG] getAchievements called for User ID:', userId);
+    const mongoAchDocs = await Achievement.find({ user: userId }).lean();
+    console.log('[ACH DEBUG] Mongo Achievement Count:', mongoAchDocs.length);
 
-    const unlockedDocs = await Achievement.find({ user: userId }).lean();
-    const unlockedSet = new Set(unlockedDocs.map((a) => a.key));
+    const unlockedSet = new Set();
     const unlockedDocMap = {};
-    unlockedDocs.forEach((d) => { unlockedDocMap[d.key] = d; });
+
+    mongoAchDocs.forEach((a) => {
+      unlockedSet.add(a.key);
+      unlockedDocMap[a.key] = a;
+    });
 
     let stats = await UserStats.findOne({ user: userId });
     const currentXP = stats?.totalXP || 0;
@@ -75,7 +79,19 @@ class AchievementService {
     let unlockedCount = 0;
 
     const achievementsList = SYSTEM_ACHIEVEMENTS.map((sys) => {
-      const isUnlocked = unlockedSet.has(sys.key);
+      // Check direct key or any legacy alias match
+      const hasDirect = unlockedSet.has(sys.key);
+      const hasAlias = (sys.aliases || []).some((aliasKey) => unlockedSet.has(aliasKey));
+      const autoUnlockByStats = (
+        (sys.key === 'xp_novice' && currentXP >= 100) ||
+        (sys.key === 'xp_pro' && currentXP >= 500) ||
+        (sys.key === 'level_up' && currentLevel >= 2) ||
+        (sys.key === 'level_master' && currentLevel >= 5) ||
+        (sys.key === 'first_task' && completedTasksCount >= 1) ||
+        (sys.key === 'task_master_10' && completedTasksCount >= 10)
+      );
+
+      const isUnlocked = hasDirect || hasAlias || autoUnlockByStats;
       if (isUnlocked) unlockedCount++;
 
       let progressLabel = 'Locked';
@@ -101,6 +117,8 @@ class AchievementService {
         progressLabel = `Level ${currentLevel}/5`;
       }
 
+      const matchingDoc = unlockedDocMap[sys.key] || (sys.aliases || []).map(k => unlockedDocMap[k]).find(Boolean);
+
       return {
         key: sys.key,
         title: sys.title,
@@ -109,7 +127,7 @@ class AchievementService {
         icon: sys.icon,
         isUnlocked,
         unlocked: isUnlocked,
-        unlockedAt: unlockedDocMap[sys.key]?.unlockedAt || null,
+        unlockedAt: matchingDoc?.unlockedAt || new Date().toISOString(),
         progressLabel,
         progressPct,
       };
@@ -124,7 +142,7 @@ class AchievementService {
     const latestUnlocked = unlockedItems.length > 0 ? unlockedItems[unlockedItems.length - 1] : null;
     const nextGoal = lockedItems.length > 0 ? lockedItems[0] : null;
 
-    console.log('[ACHIEVEMENT DEBUG] Unlocked count:', unlockedCount, 'Total:', totalCount, 'Rate:', completionRate + '%');
+    console.log('[ACH DEBUG] Unlocked count:', unlockedCount, 'Total:', totalCount, 'Completion Rate:', completionRate + '%');
 
     return {
       unlockedCount,

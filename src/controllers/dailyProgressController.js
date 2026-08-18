@@ -13,10 +13,9 @@ exports.record = async (req, res) => {
 
 exports.getByDate = async (req, res) => {
   try {
-    const progress = await DailyProgressService.getByDate(
-      req.user.id,
-      new Date(req.query.date)
-    );
+    const dateParam = req.query.date || new Date().toISOString().split('T')[0];
+    const progress = await DailyProgressService.getByDate(req.user.id, dateParam);
+    console.log('[DATE DEBUG] API Returned Date:', progress.date ? new Date(progress.date).toISOString() : null);
     return success(res, progress, 'Progress fetched');
   } catch (err) {
     return error(res, err, err.statusCode || 500);
