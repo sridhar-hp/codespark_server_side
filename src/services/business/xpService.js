@@ -9,10 +9,10 @@ class XPService {
     if (!userId) return null;
 
     const stats = await UserStats.findOneAndUpdate(
-      { $or: [{ user: userId }, { userId: userId }] },
+      { user: userId },
       {
         $inc: { totalXP: amount },
-        $setOnInsert: { user: userId, userId: userId, level: 1, streak: 0, tasksCompleted: 0, achievementsEarned: 0 },
+        $setOnInsert: { user: userId, level: 1, streak: 0, tasksCompleted: 0, achievementsEarned: 0 },
       },
       { returnDocument: 'after', upsert: true, setDefaultsOnInsert: true }
     );
@@ -50,7 +50,7 @@ class XPService {
 
   static async deductXP(userId, amount) {
     const stats = await UserStats.findOne({
-      $or: [{ user: userId }, { userId: userId }],
+      user: userId,
     });
     if (!stats) return null;
     stats.totalXP = Math.max(0, stats.totalXP - amount);
