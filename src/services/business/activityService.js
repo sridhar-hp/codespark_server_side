@@ -3,6 +3,27 @@ const Activity = require('../../models/Activity');
 
 class ActivityService {
   /**
+   * Alias method for legacy module controllers calling ActivityService.create(module, userId, body)
+   */
+  static async create(moduleName, userId, payload = {}) {
+    return this.createActivity(userId, {
+      activityType: `${(moduleName || 'SYSTEM').toUpperCase()}_ACTIVITY`,
+      title: `${(moduleName || 'System').toUpperCase()} Activity`,
+      description: payload.description || `${moduleName} activity recorded`,
+      module: moduleName || 'system',
+      metadata: payload,
+    });
+  }
+
+  /**
+   * Alias method for legacy module controllers calling ActivityService.list(module, userId)
+   */
+  static async list(moduleName, userId) {
+    const res = await this.getTimeline(userId, { module: moduleName });
+    return res.activities || [];
+  }
+
+  /**
    * Helper function to safely create an activity record.
    */
   static async createActivity(userId, data) {
